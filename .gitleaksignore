@@ -1,0 +1,2 @@
+# A fake fixture value in tests/test_hardening.py (later built at runtime); not a credential.
+6830e05a795820f3ed5c2b7e0f3276fd2314be5c:tests/test_hardening.py:generic-api-key:42
