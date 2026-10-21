@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "porchlight"
+dynamic = ["version"]
+description = "A fast, fleet-aware login dashboard (MOTD) for your terminal: vitals, services, AI plan limits, cloud status and ranked alerts, rendered from cache in milliseconds."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+license-files = ["LICENSE", "porchlight/_vendor/tomli/LICENSE"]
+authors = [{ name = "Cole Tebou" }]
+keywords = ["motd", "dashboard", "terminal", "ssh", "login", "homelab", "monitoring", "fleet", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: System :: Monitoring",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Terminals",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/coletebou/porchlight"
+Documentation = "https://github.com/coletebou/porchlight/tree/master/docs"
+Issues = "https://github.com/coletebou/porchlight/issues"
+Changelog = "https://github.com/coletebou/porchlight/blob/master/CHANGELOG.md"
+
+[project.scripts]
+porchlight = "porchlight.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "porchlight.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["porchlight*"]
+
+[tool.setuptools.package-data]
+porchlight = ["data/*.txt", "data/demo/*.json", "_vendor/tomli/LICENSE", "py.typed"]
+
+[tool.ruff]
+line-length = 130
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "UP", "SIM"]
+ignore = ["E501", "UP031", "SIM105", "SIM108", "B008", "UP006", "UP035", "UP037", "SIM102", "B023", "UP015"]
+
+[tool.ruff.lint.per-file-ignores]
+"porchlight/_vendor/*" = ["ALL"]

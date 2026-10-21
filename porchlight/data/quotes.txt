@@ -1,0 +1,62 @@
+# Fallback footer quotes (used until the quotes source has fetched a pool, or
+# when it is disabled). One per line; lines starting with # are ignored.
+The impediment to action advances action. What stands in the way becomes the way. — Marcus Aurelius
+Waste no more time arguing about what a good man should be. Be one. — Marcus Aurelius
+We suffer more often in imagination than in reality. — Seneca
+It is not that we have a short time to live, but that we waste a lot of it. — Seneca
+Well done is better than well said. — Benjamin Franklin
+Lost time is never found again. — Benjamin Franklin
+Do what you can, with what you have, where you are. — Theodore Roosevelt
+A journey of a thousand miles begins with a single step. — Lao Tzu
+Knowing others is intelligence; knowing yourself is true wisdom. — Lao Tzu
+Our life is frittered away by detail. Simplify, simplify. — Henry David Thoreau
+It's not enough to be busy; so are the ants. The question is: what are we busy about? — Henry David Thoreau
+Nothing great was ever achieved without enthusiasm. — Ralph Waldo Emerson
+Debugging is twice as hard as writing the code in the first place. — Brian Kernighan
+Simple things should be simple, complex things should be possible. — Alan Kay
+The best way to predict the future is to invent it. — Alan Kay
+There are only two hard things in computer science: cache invalidation and naming things. — Phil Karlton
+Measure twice, cut once. — Proverb
+Slow is smooth, and smooth is fast. — Proverb
+Hope is not a strategy. — Proverb
+Everything fails, all the time. — Werner Vogels
+The best time to plant a tree was twenty years ago. The second best time is now. — Proverb
+Fortune favors the bold. — Virgil
+First, solve the problem. Then, write the code. — John Johnson
+Talk is cheap. Show me the code. — Linus Torvalds
+Perfection is achieved not when there is nothing more to add, but when there is nothing left to take away. — Antoine de Saint-Exupéry
+We are what we repeatedly do. Excellence, then, is not an act, but a habit. — Will Durant
+Well begun is half done. — Aristotle
+Real knowledge is to know the extent of one's ignorance. — Confucius
+Be kind, for everyone you meet is fighting a hard battle. — Ian Maclaren
+Have nothing in your houses that you do not know to be useful, or believe to be beautiful. — William Morris
+Genius is one percent inspiration and ninety-nine percent perspiration. — Thomas Edison
+Absence of evidence is not evidence of absence. — Carl Sagan
+Leave the campsite cleaner than you found it. — Scout rule
+Weeks of coding can save you hours of planning. — Anonymous
+Any sufficiently advanced technology is indistinguishable from magic. — Arthur C. Clarke
+Nothing is so permanent as a temporary solution. — Proverb
+Programs must be written for people to read, and only incidentally for machines to execute. — Harold Abelson
+The most dangerous phrase in the language is "we've always done it this way." — Grace Hopper
+It's easier to ask forgiveness than it is to get permission. — Grace Hopper
+Walking on water and developing software from a specification are easy if both are frozen. — Edward V. Berard
+Before software can be reusable it first has to be usable. — Ralph Johnson
+Rest is not idleness. — John Lubbock
+Courage is grace under pressure. — Ernest Hemingway
+Tomorrow is often the busiest day of the week. — Proverb
+The unexamined life is not worth living. — Socrates
+No man ever steps in the same river twice. — Heraclitus
+Know thyself. — Delphic maxim
+This too shall pass. — Persian adage
+Make haste slowly. — Augustus
+Begin at the beginning and go on till you come to the end: then stop. — Lewis Carroll
+If you want to go fast, go alone. If you want to go far, go together. — Proverb
+A ship in harbor is safe, but that is not what ships are built for. — John A. Shedd
+Small deeds done are better than great deeds planned. — Peter Marshall
+Done is better than perfect. — Proverb
+The cheapest, fastest, and most reliable components are those that aren't there. — Gordon Bell
+Make it work, make it right, make it fast. — Kent Beck
+Premature optimization is the root of all evil. — Donald Knuth
+Weniger, aber besser. (Less, but better.) — Dieter Rams
+An ounce of prevention is worth a pound of cure. — Benjamin Franklin
+Plans are worthless, but planning is everything. — Dwight D. Eisenhower
