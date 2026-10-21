@@ -68,13 +68,17 @@ def machine_id() -> str:
     return (os.environ.get("PORCHLIGHT_HOST") or core.short_host()).strip().lower() or "localhost"
 
 
-def _load_toml(path: str):
+def _tomllib():
     try:
         import tomllib  # Python 3.11+
     except ImportError:  # pragma: no cover - exercised on 3.9/3.10
         from ._vendor import tomli as tomllib
+    return tomllib
+
+
+def _load_toml(path: str):
     with open(path, "rb") as f:
-        return tomllib.load(f)
+        return _tomllib().load(f)
 
 
 def merge(base: dict, over: dict) -> dict:
@@ -119,7 +123,7 @@ class Config:
         self.raw = raw or {}
         self.problems = list(problems or [])
         self.machine = host or machine_id()
-        top = {k: v for k, v in self.raw.items() if k not in ("hosts",)}
+        top = {k: v for k, v in self.raw.items() if k != "hosts"}
         _check(top, DEFAULTS, "", self.problems)
         data = merge(DEFAULTS, top)
         self.matched = []
@@ -211,7 +215,6 @@ def load(path=None, host=None, fresh=False) -> Config:
             raw = _load_toml(path)
         except (OSError, ValueError) as e:  # TOMLDecodeError subclasses ValueError
             problems.append("config %s unreadable: %s" % (path, e))
-            raw = {}
     cfg = Config(raw, path, exists, problems, host)
     _CACHE.clear()
     _CACHE[key] = cfg
@@ -220,8 +223,4 @@ def load(path=None, host=None, fresh=False) -> Config:
 
 def loads(text: str, host=None) -> Config:
     """A Config from TOML text (tests, `porchlight init --check`)."""
-    try:
-        import tomllib
-    except ImportError:  # pragma: no cover
-        from ._vendor import tomli as tomllib
-    return Config(tomllib.loads(text), "<string>", True, [], host)
+    return Config(_tomllib().loads(text), "<string>", True, [], host)

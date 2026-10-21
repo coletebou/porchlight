@@ -178,11 +178,11 @@ def setup(cfg) -> list:
     if mode is True:
         set_ascii(True)
     elif mode is False:
-        set_ascii(enc not in ("utf8", "utf_8") and enc != "")
+        set_ascii(enc not in ("", "utf8", "utf_8"))
     else:
         in_mux = os.environ.get("TERM", "").startswith(("tmux", "screen")) or bool(os.environ.get("TMUX"))
         good = utf8_locale()
-        set_ascii((enc not in ("", "utf8", "utf_8")) or (in_mux and not good))
+        set_ascii(enc not in ("", "utf8", "utf_8") or (in_mux and not good))
         if not good and not ASCII and sys.platform.startswith("linux"):
             LOCALE_HINT = "locale is not UTF-8: glyphs may garble in tmux · export LANG=C.UTF-8"
         elif ASCII and not good:
@@ -317,7 +317,7 @@ def _cw(ch: str, nxt: str = "") -> int:
         return 0
     if unicodedata.east_asian_width(ch) in ("W", "F") or 0x1F300 <= o <= 0x1FAFF:
         return 2
-    if nxt == "️":  # a text symbol forced to emoji presentation (☀️, ⛅️)
+    if nxt == "\ufe0f":  # a text symbol forced to emoji presentation (☀️, ⛅️)
         return 2
     return 1
 

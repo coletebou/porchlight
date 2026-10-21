@@ -168,15 +168,15 @@ def p_network(x):
     fwd = {str(p) for t in tun if t["alive"] and t.get("kind") == "L" for p in t.get("ports") or []}
     items = []
     for t in tun:
-        host = (t.get("host") or "?")[:18]
         if not t["alive"]:
             continue
+        host, port_list = (t.get("host") or "?")[:18], "/".join(t.get("ports") or [])
         if t.get("kind") == "D":
-            items.append(T.dot("ok") + " socks" + T.dim(" :%s %s " % ("/".join(t.get("ports") or []), T.g("via"))) + host)
+            items.append(T.dot("ok") + " socks" + T.dim(" :%s %s " % (port_list, T.g("via"))) + host)
         elif t.get("kind") == "R":
-            items.append(T.dot("ok") + " " + host + T.dim(" ←:%s" % "/".join(t.get("ports") or [])))
+            items.append(T.dot("ok") + " " + host + T.dim(" ←:%s" % port_list))
         else:
-            items.append(T.dot("ok") + " " + host + T.dim(" :%s" % "/".join(t.get("ports") or [])))
+            items.append(T.dot("ok") + " " + host + T.dim(" :%s" % port_list))
     rows += [kv("tunnels" if i == 0 else "", it, 10) for i, it in enumerate(cells(items, x.cw - 11, 16))]
     ports = x.lv.get("ports") or []
     if ports:

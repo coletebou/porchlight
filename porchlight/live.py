@@ -60,12 +60,10 @@ def _disk(mount: str):
 def primary_ip() -> str:
     """Source address of the default route; a UDP connect sends no packet."""
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.settimeout(0.2)
-        s.connect(("192.0.2.1", 53))  # TEST-NET-1: routable shape, never answered
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.settimeout(0.2)
+            s.connect(("192.0.2.1", 53))  # TEST-NET-1: routable shape, never answered
+            return s.getsockname()[0]
     except OSError:
         return ""
 
@@ -90,7 +88,10 @@ def _disks(mounts, budget: float = 0.8):
     import threading
     import time
     res = {}
-    threads = [threading.Thread(target=lambda m=m: res.__setitem__(m, _disk(m)), daemon=True) for m in mounts]
+
+    def probe(mount):
+        res[mount] = _disk(mount)
+    threads = [threading.Thread(target=probe, args=(m,), daemon=True) for m in mounts]
     for t in threads:
         t.start()
     deadline = time.monotonic() + budget

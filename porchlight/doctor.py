@@ -54,7 +54,7 @@ def run(host, cache, plugin_errors=()) -> int:
             continue
         local = core.read_json(registry.src_path(name))
         rec = cache.rec(name)
-        origin = "local" if rec is not None and rec == local else ("hub" if rec else "local")
+        origin = "hub" if rec and rec != local else "local"
         age = now - rec.get("ts", 0) if rec else None
         if rec is None:
             state, color = "none", "dim"

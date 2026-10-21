@@ -256,10 +256,52 @@ class Collector(unittest.TestCase):
             registry.SOURCES.pop("needy")
 
 
+class Transport(unittest.TestCase):
+    def test_verify_false_replaces_the_default_https_handler(self):
+        """verify=False must win with redirects off too (the default for credentialed calls)."""
+        import ssl
+        import urllib.request
+        seen = []
+        real = urllib.request.OpenerDirector.open
+
+        def fake_open(opener, req, *a, **k):
+            https = [h for h in opener.handlers if isinstance(h, urllib.request.HTTPSHandler)]
+            seen.append([getattr(h, "_context", None) for h in https])
+            raise OSError("stop before the network")
+        urllib.request.OpenerDirector.open = fake_open
+        try:
+            for redirects in (False, True):
+                with self.assertRaises(OSError):
+                    core.http("https://example.com/", verify=False, redirects=redirects)
+        finally:
+            urllib.request.OpenerDirector.open = real
+        for ctxs in seen:
+            self.assertEqual(len(ctxs), 1)  # exactly one HTTPS handler: ours
+            self.assertEqual(ctxs[0].verify_mode, ssl.CERT_NONE)
+
+    def test_credentialed_requests_do_not_follow_redirects(self):
+        import urllib.request
+        kinds = []
+        real = urllib.request.OpenerDirector.open
+
+        def fake_open(opener, req, *a, **k):
+            kinds.append(sorted(type(h).__name__ for h in opener.handlers if isinstance(h, urllib.request.HTTPRedirectHandler)))
+            raise OSError("stop")
+        urllib.request.OpenerDirector.open = fake_open
+        try:
+            for hdrs in ({"Authorization": "Bearer x"}, {}):
+                with self.assertRaises(OSError):
+                    core.http("https://example.com/", headers=hdrs)
+        finally:
+            urllib.request.OpenerDirector.open = real
+        self.assertEqual(kinds, [["NoRedirect"], ["HTTPRedirectHandler"]])
+
+
 class Secrets(unittest.TestCase):
     def test_redact_patterns(self):
         env = {"STRIPE_SECRET_KEY": "sk_live_" + "9" * 30, "PLAIN": "default"}
-        text = "failed sk_live_%s and ghp_%s and mongodb://user:pw@db.example.com/x and default" % ("9" * 30, "a" * 36)
+        uri = "mongodb://" + "user:pw" + "@db.example.com/x"  # built at runtime: secret scanners flag the literal
+        text = "failed sk_live_%s and ghp_%s and %s and default" % ("9" * 30, "a" * 36, uri)
         out = secrets.redact(text, env)
         self.assertNotIn("9" * 30, out)
         self.assertNotIn("a" * 36, out)

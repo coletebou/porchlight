@@ -162,7 +162,7 @@ def _patch_live(now: float):
     live.repo = repo
 
 
-def build(theme=None, keep=False):
+def build(theme=None):
     """Write the demo cache and config; returns (host, cache, tmpdir)."""
     from . import config, hosts, registry, theme as T
     tmp = tempfile.mkdtemp(prefix="porchlight-demo-")
@@ -202,16 +202,16 @@ def build(theme=None, keep=False):
 
 def run(flags, opts, words) -> int:
     from . import render, theme as T
+    from .cli import compact_flag
     if opts.get("--color"):
         T.set_mode(opts["--color"])
-    host, cache, tmp = build(opts.get("--theme"), keep="--keep" in flags)
+    host, cache, tmp = build(opts.get("--theme"))
     if "--ascii" in flags:
         T.set_ascii(True)
     try:
         width = int(opts["--width"]) if (opts.get("--width") or "").isdigit() else None
         only = [w for w in words if not w.startswith("-")] or None
-        compact = True if "--compact" in flags else (False if "--full" in flags else None)
-        print(render.render(host, cache, width=width, only=only, compact=compact))
+        print(render.render(host, cache, width=width, only=only, compact=compact_flag(flags)))
     finally:
         if "--keep" in flags:
             print("demo cache kept in %s" % tmp)

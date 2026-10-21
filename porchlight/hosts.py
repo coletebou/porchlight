@@ -29,8 +29,8 @@ def _norm_units(items, default_scope):
     out = []
     for it in items or []:
         if isinstance(it, str):
-            unit = it
-            out.append((unit, unit.split("@")[0].rsplit(".", 1)[0] if unit.endswith(".service") else unit, default_scope))
+            label = it.split("@")[0].rsplit(".", 1)[0] if it.endswith(".service") else it
+            out.append((it, label, default_scope))
         elif isinstance(it, dict) and it.get("unit"):
             out.append((str(it["unit"]), str(it.get("label") or it["unit"]), str(it.get("scope") or default_scope)))
     return out

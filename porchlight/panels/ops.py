@@ -39,9 +39,9 @@ def p_health(x):
             txt = T.dot("unknown") + " " + r["label"] + T.dim(" " + r["error"])
         else:
             behind = r.get("behind")
-            txt = T.dot("warn") + " " + r["label"] + " " + T.c(
-                ("%d behind %s" % (behind, r.get("ref"))) if behind and behind > 0 else "≠ %s" % r.get("ref"), "amber") + \
-                T.dim(" (%s → %s)" % (r.get("deployed"), r.get("want")))
+            gap = ("%d behind %s" % (behind, r.get("ref"))) if behind and behind > 0 else "≠ %s" % r.get("ref")
+            txt = (T.dot("warn") + " " + r["label"] + " " + T.c(gap, "amber") +
+                   T.dim(" (%s → %s)" % (r.get("deployed"), r.get("want"))))
             lvl = T.worst(lvl, "warn")
         rows.append(kv("deploy" if i == 0 else "", txt, 9))
     if not rows:

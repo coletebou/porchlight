@@ -51,15 +51,19 @@ def grid(panels, width, accent, cfg) -> list:
 
 
 # ── Banner ──────────────────────────────────────────────────────────────────
-def banner_text(host) -> str:
+def _user() -> str:
+    """The login name; "" for a uid with no passwd entry (a bare container)."""
     import getpass
-    tpl = str(host.cfg.get("banner.text", "{label}") or "")
     try:
-        user = getpass.getuser()
+        return getpass.getuser()
     except (KeyError, OSError):
-        user = ""
+        return ""
+
+
+def banner_text(host) -> str:
+    tpl = str(host.cfg.get("banner.text", "{label}") or "")
     return tpl.replace("{label}", host.label).replace("{host}", host.name).replace(
-        "{user}", user).replace("{identity}", host.identity).strip()
+        "{user}", _user()).replace("{identity}", host.identity).strip()
 
 
 def _chafa(path: str, cols: int, rows: int) -> list:
@@ -97,8 +101,7 @@ def banner_lines(host, max_w: int):
         if art:
             return art, True
     if b.get("file"):
-        lines = core.read_text(core.expand(b["file"])).splitlines()
-        lines = _trim(lines)
+        lines = _trim(core.read_text(core.expand(b["file"])).splitlines())
         if lines and max(T.width(ln) for ln in lines) <= max_w:
             return lines, any("\x1b[" in ln for ln in lines)
         if lines:
@@ -166,20 +169,17 @@ def clock(host) -> str:
     primary = g.get("clock", "auto")
     if primary == "auto":
         primary = "utc" if host.server else "local"
-    second = g.get("clock_secondary", "auto")
-    local_zone = time.strftime("%Z", time.localtime(t))
     if primary == "utc":
         head = time.strftime("%a %b %d · %H:%M UTC", time.gmtime(t))
-        if second == "auto":
-            extra = "" if local_zone in ("UTC", "GMT") else time.strftime("%H:%M %Z", time.localtime(t))
-        else:
-            extra = _zone_time(t, second) if second else ""
+        other = time.strftime("%H:%M %Z", time.localtime(t))
     else:
         head = time.strftime("%a %b %d · %H:%M %Z", time.localtime(t))
-        if second == "auto":
-            extra = "" if local_zone in ("UTC", "GMT") else time.strftime("%H:%M UTC", time.gmtime(t))
-        else:
-            extra = _zone_time(t, second) if second else ""
+        other = time.strftime("%H:%M UTC", time.gmtime(t))
+    second = g.get("clock_secondary", "auto")
+    if second == "auto":  # the other of UTC and local time, unless the two are the same
+        extra = "" if time.strftime("%Z", time.localtime(t)) in ("UTC", "GMT") else other
+    else:
+        extra = _zone_time(t, second) if second else ""
     return head + (T.dim("  ·  " + extra) if extra else "")
 
 
@@ -206,13 +206,8 @@ def side_facts(host, cache, lv, al, last_seen) -> list:
     v = lv["vitals"]
     hc = host.cfg.table("header")
     mid = T.gradient(T.ACCENT, 0.5)
-    who = host.label
-    if hc.get("user"):
-        import getpass
-        try:
-            who = getpass.getuser() + "@" + who
-        except (KeyError, OSError):
-            pass
+    user = _user() if hc.get("user") else ""
+    who = user + "@" + host.label if user else host.label
     facts = [T.c(T.g("bullet") + " ", mid) + T.c(who, mid, bold=True) + T.dim("  ·  " + str(v.get("os", "")))]
     facts.append(clock(host))
     if hc.get("weather", True):
@@ -252,7 +247,7 @@ def side_facts(host, cache, lv, al, last_seen) -> list:
         tail.append(T.c("data %s old · refreshing" % core.human_age(data_age), "amber"))
     if tail:
         facts.append(T.dim(" · ").join(tail))
-    if getattr(T, "LOCALE_HINT", ""):
+    if T.LOCALE_HINT:
         facts.append(T.c(T.LOCALE_HINT, "amber"))
     return facts
 
@@ -441,9 +436,9 @@ def render(host, cache, width=None, only=None, login=False, compact=None) -> str
     if not only:
         out.append("")
         if compact:
-            more = len([k for k in host.panels if k not in keys and k in panels.BUILDERS])
+            hidden = any(k not in keys and k in panels.BUILDERS for k in host.panels)
             out.append(" " + T.fit(T.dim("compact view · ") + T.c("porchlight all", "slate") +
-                                   T.dim(" for %s" % ("every panel" if more else "the full layout") + " (or widen the window)"), W - 1))
+                                   T.dim(" for %s" % ("every panel" if hidden else "the full layout") + " (or widen the window)"), W - 1))
         else:
             out += footer(host, cache, W, t0)
     text = "\n".join(out)

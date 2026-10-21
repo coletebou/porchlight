@@ -73,6 +73,15 @@ def _setup(flags, opts):
     return host, problems
 
 
+def compact_flag(flags, full=False):
+    """--compact → True, --full (or `porchlight all`) → False, else None: render decides."""
+    if "--compact" in flags:
+        return True
+    if "--full" in flags or full:
+        return False
+    return None
+
+
 def _due_any(host, cache) -> bool:
     from . import collect, core, registry
     now = core.now()
@@ -161,10 +170,11 @@ def _main(argv) -> int:
     if cmd == "alerts":
         from . import alerts
         found = alerts.gather(host, cache, alerts.probe_all(host))
+        rc = 1 if any(a["sev"] == "crit" for a in found) else 0
         if "--json" in flags:
             import json
             print(json.dumps(found, indent=2))
-            return 1 if any(a["sev"] == "crit" for a in found) else 0
+            return rc
         if not found:
             print(T.c("%s no alerts" % T.g("ok"), "green"))
         for a in found:
@@ -172,7 +182,7 @@ def _main(argv) -> int:
             print("%s %s %s" % (T.c(gl, col), a["msg"], T.dim("[%s]" % a.get("src", ""))))
             if a.get("fix"):
                 print("  " + T.dim("fix: ") + T.c(a["fix"], "slate"))
-        return 1 if any(a["sev"] == "crit" for a in found) else 0
+        return rc
 
     from . import panels, render
     only = None
@@ -189,7 +199,7 @@ def _main(argv) -> int:
             print("porchlight: unknown command or panel: %s (porchlight -h)" % ", ".join(unknown), file=sys.stderr)
             return 2
     width = int(opts["--width"]) if (opts.get("--width") or "").isdigit() else None
-    compact = True if "--compact" in flags else (False if "--full" in flags or full else None)
+    compact = compact_flag(flags, full)
     if cmd == "watch":
         secs = float(words[1]) if len(words) > 1 and words[1].replace(".", "", 1).isdigit() else 10.0
         return watch(host, max(1.0, secs), width, compact)
@@ -214,9 +224,11 @@ def badge(host, flags) -> int:
         print(json.dumps({"crit": nc, "warn": nw, "ts": snap.get("ts")}))
         return 0
     tmux = "--tmux" in flags
+
     def paint(text, color):
-        return "#[fg=%s]%s#[default]" % ({"red": "red", "amber": "yellow", "green": "green"}[color], text) if tmux \
-            else T.c(text, color)
+        if tmux:
+            return "#[fg=%s]%s#[default]" % ({"red": "red", "amber": "yellow", "green": "green"}[color], text)
+        return T.c(text, color)
     parts = []
     if nc:
         parts.append(paint("%s%d" % (T.g("crit"), nc), "red"))

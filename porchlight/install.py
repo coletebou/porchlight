@@ -15,6 +15,7 @@ from . import core
 
 LABEL = "dev.porchlight.collect"
 MARK_BEGIN, MARK_END = "# >>> porchlight >>>", "# <<< porchlight <<<"
+PASS_ENV = ("PORCHLIGHT_CONFIG", "PORCHLIGHT_CACHE_DIR", "PORCHLIGHT_HOST")  # carried into the timer's environment
 
 
 def package_root() -> str:
@@ -66,7 +67,7 @@ def _plist(interval: int) -> str:
     path = ":".join([os.path.join(core.HOME, ".local/bin"), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin",
                      "/usr/sbin", "/sbin"])
     env = "        <key>PATH</key>\n        <string>%s</string>\n" % escape(path)
-    for k in ("PORCHLIGHT_CONFIG", "PORCHLIGHT_CACHE_DIR", "PORCHLIGHT_HOST"):
+    for k in PASS_ENV:
         if os.environ.get(k):
             env += "        <key>%s</key>\n        <string>%s</string>\n" % (k, escape(os.environ[k]))
     log = os.path.join(core.HOME, "Library", "Logs", "porchlight-collect.log")
@@ -104,7 +105,7 @@ def _plist(interval: int) -> str:
 def _systemd_units(interval: int):
     argv = " ".join(shlex.quote(a) for a in collect_argv()).replace("%", "%%")
     env_lines = "".join("Environment=%s=%s\n" % (k, os.environ[k].replace("%", "%%"))
-                        for k in ("PORCHLIGHT_CONFIG", "PORCHLIGHT_CACHE_DIR", "PORCHLIGHT_HOST") if os.environ.get(k))
+                        for k in PASS_ENV if os.environ.get(k))
     service = """[Unit]
 Description=Refresh the porchlight dashboard caches
 Documentation=https://github.com/coletebou/porchlight
@@ -139,6 +140,10 @@ WantedBy=timers.target
     return service, timer
 
 
+def _systemd_dir() -> str:
+    return os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(core.HOME, ".config"), "systemd", "user")
+
+
 def _cron_line(interval: int) -> str:
     minutes = max(1, interval // 60)
     cmd = " ".join(shlex.quote(a) for a in collect_argv()).replace("%", "\\%")  # cron turns a bare % into a newline
@@ -165,7 +170,7 @@ def install_timer(host, force_cron=False) -> int:
                  "installing porchlight with Homebrew's python3 or pipx avoids that.")
         return 0 if rc == 0 else 1
     if core.which("systemctl") and not force_cron:
-        d = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(core.HOME, ".config"), "systemd", "user")
+        d = _systemd_dir()
         os.makedirs(d, exist_ok=True)
         service, timer = _systemd_units(interval)
         with open(os.path.join(d, "porchlight-collect.service"), "w") as f:
@@ -207,7 +212,7 @@ def uninstall_timer() -> int:
             os.remove(path)
             done.append(path)
     if core.which("systemctl"):
-        d = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.join(core.HOME, ".config"), "systemd", "user")
+        d = _systemd_dir()
         core.run(["systemctl", "--user", "disable", "--now", "porchlight-collect.timer"], 10)
         for n in ("porchlight-collect.timer", "porchlight-collect.service"):
             p = os.path.join(d, n)
@@ -274,9 +279,10 @@ def install_shell(shell: str, hushlogin=False) -> int:
     path = rc_file(shell)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     cur = core.read_text(path)
-    body = _strip_block(cur)
-    new = (body + ("\n" if body and not body.endswith("\n\n") else "") + shell_snippet(shell) + "\n") if shell != "fish" \
-        else shell_snippet(shell) + "\n"
+    new = shell_snippet(shell) + "\n"
+    if shell != "fish":  # fish's conf.d file is ours alone; an rc file keeps everything else in it
+        body = _strip_block(cur)
+        new = body + ("\n" if body and not body.endswith("\n\n") else "") + new
     with open(path, "w") as f:
         f.write(new)
     _say("%s the porchlight block in %s" % ("updated" if MARK_BEGIN in cur else "added", path))
@@ -320,8 +326,12 @@ def run(cmd, words, flags, opts, host) -> int:
             print(shell_snippet(_shell(opts)))
         if what in ("timer", "all"):
             interval = int(host.cfg.get("collector.interval", 300))
-            print(_plist(interval) if core.IS_MAC else "\n".join(_systemd_units(interval)) if core.which("systemctl")
-                  else _cron_line(interval))
+            if core.IS_MAC:
+                print(_plist(interval))
+            elif core.which("systemctl"):
+                print("\n".join(_systemd_units(interval)))
+            else:
+                print(_cron_line(interval))
         return 0
     rc = 0
     if cmd == "install":

@@ -413,16 +413,13 @@ def cert_days(name: str, addr: str, port: int, timeout: float = 5.0) -> float:
         defaults={"targets": [], "warn_days": 21, "crit_days": 10})
 def certs(ctx):
     """TLS certificate expiry (and validity) for the names you serve."""
+    import ssl
     warn, crit = float(ctx.cfg.get("warn_days", 21)), float(ctx.cfg.get("crit_days", 10))
-    targets = []
-    for t in ctx.cfg.get("targets") or []:
-        t = {"name": t} if isinstance(t, str) else t
-        if isinstance(t, dict) and t.get("name"):
-            targets.append(t)
+    targets = [{"name": t} if isinstance(t, str) else t for t in ctx.cfg.get("targets") or []]
+    targets = [t for t in targets if isinstance(t, dict) and t.get("name")]
     res = core.parallel({t["name"]: (lambda t=t: cert_days(t["name"], t.get("connect") or t["name"], int(t.get("port", 443))))
                          for t in targets}, timeout=12)
     rows, alerts = [], []
-    import ssl
     for t in targets:
         n = t["name"]
         days = res.get(n)
@@ -479,11 +476,10 @@ def unit_runs(units) -> dict:
 @source("backups", ttl=600, timeout=10, defaults={"units": [], "files": []}, requires=("units|files",))
 def backups(ctx):
     """Backup jobs: systemd service results and timer cadence, plus files that must stay fresh."""
+    import glob
     now = core.now()
     rows, alerts = [], []
-    units = []
-    for u in ctx.cfg.get("units") or []:
-        units.append({"unit": u} if isinstance(u, str) else u)
+    units = [{"unit": u} if isinstance(u, str) else u for u in ctx.cfg.get("units") or []]
     units = [u for u in units if isinstance(u, dict) and u.get("unit")]
     runs = unit_runs([u["unit"] for u in units]) if units and core.which("systemctl") else {}
     for u in units:
@@ -511,7 +507,7 @@ def backups(ctx):
     for f in ctx.cfg.get("files") or []:
         if not isinstance(f, dict) or not f.get("path"):
             continue
-        paths = sorted(__import__("glob").glob(core.expand(f["path"])), key=core.mtime)
+        paths = sorted(glob.glob(core.expand(f["path"])), key=core.mtime)
         mt = core.mtime(paths[-1]) if paths else 0
         name = str(f.get("label") or os.path.basename(str(f["path"])))
         max_h = float(f.get("max_age_hours", 26))
@@ -538,6 +534,7 @@ def files(ctx):
             continue
         pat = core.expand(t.get("glob") or t["path"])
         max_b, max_l = int(t.get("max_bytes") or 0), int(t.get("max_lines") or 0)
+        cap = "/".join("%d%s" % (n, unit) for n, unit in ((max_b, "B"), (max_l, "L")) if n)
         warn_at = float(t.get("warn_pct", 90))
         for p in sorted(glob.glob(pat))[:20]:
             try:
@@ -554,8 +551,8 @@ def files(ctx):
             rows.append({"label": label[:24], "bytes": nb, "lines": nl, "pct": round(share, 1),
                          "max_bytes": max_b, "max_lines": max_l, "mtime": core.mtime(p)})
             if share >= 100:
-                alerts.append({"sev": str(t.get("sev", "crit")), "msg": "%s over budget: %dB/%dL (cap %s)" % (
-                    label, nb, nl, "/".join(x for x in (("%dB" % max_b) if max_b else "", ("%dL" % max_l) if max_l else "") if x))})
+                alerts.append({"sev": str(t.get("sev", "crit")),
+                               "msg": "%s over budget: %dB/%dL (cap %s)" % (label, nb, nl, cap)})
             elif share >= warn_at:
                 alerts.append({"sev": "warn", "msg": "%s at %d%% of its budget" % (label, share)})
     rows.sort(key=lambda r: -r["pct"])
@@ -578,8 +575,8 @@ def drift(ctx):
         ref = str(t.get("ref") or "HEAD")
         deployed = ""
         if t.get("file"):
-            deployed = core.read_text(core.expand(t["file"]), 200).strip().split()[0:1]
-            deployed = deployed[0] if deployed else ""
+            words = core.read_text(core.expand(t["file"]), 200).split()
+            deployed = words[0] if words else ""
         elif t.get("url"):
             try:
                 r = core.http(str(t["url"]), timeout=6)

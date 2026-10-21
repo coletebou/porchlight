@@ -61,17 +61,17 @@ def nws(ctx, lat, lon):
         if lat is None:
             raise RuntimeError("nws needs latitude/longitude or nws_station")
         r = ctx.http("https://api.weather.gov/points/%.4f,%.4f" % (float(lat), float(lon)), headers=ua, timeout=5)
-        stations_url = ((r.body or {}).get("properties") or {}).get("observationStations") if isinstance(r.body, dict) else None
+        stations_url = (r.body.get("properties") or {}).get("observationStations") if isinstance(r.body, dict) else None
         if not stations_url:
             raise RuntimeError("nws points HTTP %s" % r.status)
         r = ctx.http(stations_url, headers=ua, timeout=5)
-        feats = (r.body or {}).get("features") if isinstance(r.body, dict) else None
+        feats = r.body.get("features") if isinstance(r.body, dict) else None
         if not feats:
             raise RuntimeError("nws stations HTTP %s" % r.status)
-        station = ((feats[0].get("properties") or {}).get("stationIdentifier"))
+        station = (feats[0].get("properties") or {}).get("stationIdentifier")
     r = ctx.http("https://api.weather.gov/stations/%s/observations/latest" % urllib.parse.quote(str(station)),
                  headers=ua, timeout=5)
-    p = (r.body or {}).get("properties") if isinstance(r.body, dict) else None
+    p = r.body.get("properties") if isinstance(r.body, dict) else None
     if not p or (p.get("temperature") or {}).get("value") is None:
         raise RuntimeError("nws observation HTTP %s" % r.status)
     c = float(p["temperature"]["value"])

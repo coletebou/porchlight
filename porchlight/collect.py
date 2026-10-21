@@ -12,7 +12,6 @@ import fcntl
 import os
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, wait
 
 from . import core, registry, secrets
 from .registry import SOURCES, Ctx, applies, src_path
@@ -113,6 +112,10 @@ def collect(host, force=False, only=None, quiet=True) -> int:
         if not quiet:
             print("porchlight: a collector is already running", file=sys.stderr)
         return 0
+    # Imported here, not at the top: the login render imports this module for
+    # is_due(), and concurrent.futures drags in logging (see core.parallel).
+    from concurrent.futures import ThreadPoolExecutor, wait
+
     from . import snapshot, sources
     sources.register_all(host)
     env = secrets.load(host.cfg)
@@ -153,7 +156,7 @@ def collect(host, force=False, only=None, quiet=True) -> int:
         " · errors: " + " | ".join(errs) if errs else ""))
     if not quiet:
         for r in sorted(results, key=lambda r: r["name"]):
-            state = "ok  " if r.get("ok") else ("skip" if r.get("skip") else "FAIL")
+            state = next((s for s in ("ok", "skip", "soft") if r.get(s)), "FAIL")
             print("%-4s %-20s %6dms  %s" % (state, r["name"], r.get("ms", 0), r.get("error") or ""))
         for f in pending:
             print("TIME %-20s (abandoned at the deadline)" % (futs[f].name if f in futs else "fleet"))

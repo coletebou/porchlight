@@ -33,7 +33,7 @@ def entries(host) -> list:
         if not isinstance(c, dict) or not c.get("command"):
             continue
         name = str(c.get("name") or "custom%d" % (i + 1)).lower()
-        if not _NAME.match(name) or name in registry.SOURCES and not getattr(registry.SOURCES[name], "custom", False):
+        if not _NAME.match(name) or (name in registry.SOURCES and not getattr(registry.SOURCES[name], "custom", False)):
             continue  # never shadow a built-in source
         e = dict(c)
         e.update(name=name, panel=str(c.get("panel") or name), title=str(c.get("title") or name.upper()))
@@ -73,7 +73,8 @@ def _make(e):
         cmd = e["command"]
         argv = [core.expand(a) for a in cmd] if isinstance(cmd, list) else ["/bin/sh", "-c", str(cmd)]
         env = dict(ctx.env)
-        env.update({str(k): str(v) for k, v in (e.get("env") or {}).items()} if isinstance(e.get("env"), dict) else {})
+        if isinstance(e.get("env"), dict):
+            env.update({str(k): str(v) for k, v in e["env"].items()})
         rc, out, err = core.run(argv, float(e.get("timeout", 20)), env=env, cwd=core.expand(e["cwd"]) if e.get("cwd") else None)
         if rc in (124, 126, 127):
             raise RuntimeError(err.strip()[:160] or "rc %d" % rc)

@@ -15,7 +15,7 @@ import subprocess
 import time
 
 from .. import core
-from ..registry import SOURCES, source, src_path
+from ..registry import SOURCES, scope_of, source, src_path
 
 
 def remote_command(cache_dir: str = "") -> str:
@@ -28,7 +28,6 @@ def remote_command(cache_dir: str = "") -> str:
 
 def build_bundle(host, peers_prev: dict) -> dict:
     srcs = {}
-    from ..registry import scope_of
     for name, s in SOURCES.items():
         if scope_of(s, host) == "global":
             rec = core.read_json(src_path(name))

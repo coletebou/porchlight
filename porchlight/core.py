@@ -112,7 +112,7 @@ def dotenv(path: str) -> dict:
     """KEY=VALUE lines of an env file, parsed in memory: no shell, no expansion
     beyond a leading ~ or $HOME. Values never reach a log line or argv."""
     out = {}
-    for line in read_text(expand(path), 1 << 20).splitlines():
+    for line in read_text(expand(path)).splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -235,13 +235,13 @@ class Resp:
         return 200 <= self.status < 300
 
 
-def _no_redirect_opener():
+def _no_redirect_opener(*handlers):
     import urllib.request
 
     class NoRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, *a, **k):
             return None  # surface the 3xx instead of forwarding credentials to another host
-    return urllib.request.build_opener(NoRedirect)
+    return urllib.request.build_opener(NoRedirect, *handlers)
 
 
 def http(url, method="GET", headers=None, data=None, json_body=None, timeout=6.0, basic=None,
@@ -278,12 +278,9 @@ def http(url, method="GET", headers=None, data=None, json_body=None, timeout=6.0
         ctx = ssl.create_default_context()
         ctx.check_hostname, ctx.verify_mode = False, ssl.CERT_NONE
         handlers.append(urllib.request.HTTPSHandler(context=ctx))
-    if follow:
-        opener = urllib.request.build_opener(*handlers)
-    else:
-        opener = _no_redirect_opener()
-        for h in handlers:
-            opener.add_handler(h)
+    # Handlers must go through build_opener, which replaces urllib's default of the
+    # same class: add_handler() would leave the verifying HTTPSHandler in front.
+    opener = urllib.request.build_opener(*handlers) if follow else _no_redirect_opener(*handlers)
     req = urllib.request.Request(url, data=body, headers=hdrs, method=method)
     t0 = time.monotonic()
     try:

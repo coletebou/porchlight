@@ -51,12 +51,16 @@ def load(cfg, refresh=False) -> dict:
     return env
 
 
+# Names that match the pattern but hold paths, not secrets (redacting them only garbles messages).
+_NOT_SECRET = {"PWD", "OLDPWD", "SSH_AUTH_SOCK", "XAUTHORITY", "SSH_AGENT_PID", "GPG_AGENT_INFO"}
+
+
 def sensitive_values(env: dict) -> list:
     """Values of secret-looking variables, longest first. Short plain words
     ('default', 'subscription') are skipped: masking them would corrupt output,
     and real secrets are long or contain digits or symbols."""
     vals = {v for k, v in env.items()
-            if isinstance(v, str) and len(v) >= 8 and _SENSITIVE.search(k)
+            if isinstance(v, str) and len(v) >= 8 and _SENSITIVE.search(k) and k not in _NOT_SECRET
             and (len(v) >= 20 or re.search(r"[^A-Za-z]", v))}
     return sorted(vals, key=len, reverse=True)
 
@@ -66,9 +70,11 @@ def redact(text, env=None, limit: int = 300) -> str:
     if not text:
         return text
     text = " ".join(str(text).split())
-    for v in sensitive_values(env if env is not None else (_ENV or {})):
+    if env is None:
+        env = _ENV or {}
+    for v in sensitive_values(env):
         if v in text:
-            name = next((k for k, x in (env or _ENV or {}).items() if x == v and _SENSITIVE.search(k)), "secret")
+            name = next((k for k, x in env.items() if x == v and _SENSITIVE.search(k) and k not in _NOT_SECRET), "secret")
             text = text.replace(v, "<redacted:%s>" % name)
     text = _URI_CREDS.sub(r"\1<redacted>@", text)
     text = _TOKENISH.sub(lambda m: m.group(1) + "…", text)
