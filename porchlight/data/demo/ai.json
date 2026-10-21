@@ -1,0 +1,63 @@
+{
+  "_comment": "Sample AI LIMITS records (fictional). Times written as \"+N\" / \"-N\" are seconds from the moment the demo loads, so the sample never goes stale.",
+  "claude_usage": {
+    "provider": "claude",
+    "plan": "max (default_claude_max_5x)",
+    "windows": [
+      {"label": "5h", "used_pct": 38.0, "resets_at": "+8040", "severity": "normal"},
+      {"label": "7d", "used_pct": 82.0, "resets_at": "+221400", "severity": "warning"},
+      {"label": "7d Opus", "used_pct": 57.0, "resets_at": "+221400", "severity": "normal", "extra": true}
+    ],
+    "credits": {"extra_usage_enabled": false, "currency": "USD", "used": 0.0, "monthly_limit": null, "limit_reached": false},
+    "source": "api",
+    "as_of": "-140",
+    "latency_ms": 286,
+    "error": null,
+    "detail": {"token_store": "keychain:demo", "token_expires_at": "+19800"},
+    "alerts": [{"sev": "warn", "msg": "Claude 7d at 82% (resets Sat 09:00)"}]
+  },
+  "codex_usage": {
+    "provider": "codex",
+    "plan": "plus",
+    "windows": [
+      {"label": "5h", "used_pct": 12.0, "resets_at": "+12120"},
+      {"label": "7d", "used_pct": 41.0, "resets_at": "+367200"},
+      {"label": "review 7d", "used_pct": 3.0, "resets_at": "+367200", "extra": true}
+    ],
+    "credits": {"has_credits": true, "unlimited": false, "balance": 240.0},
+    "source": "api",
+    "as_of": "-140",
+    "latency_ms": 412,
+    "error": null,
+    "detail": {"token_expires_at": "+604800", "limit_reached": false, "allowed": true,
+               "rate_limit_reached_type": null, "spend_control_reached": false}
+  },
+  "cursor_usage": {
+    "provider": "cursor",
+    "plan": "pro",
+    "windows": [
+      {"label": "total", "used_pct": 64.0, "resets_at": "+950400"},
+      {"label": "auto", "used_pct": 41.0, "resets_at": "+950400", "extra": true},
+      {"label": "api", "used_pct": 23.0, "resets_at": "+950400", "extra": true}
+    ],
+    "credits": {"included_used_usd": 12.8, "included_limit_usd": 20.0, "bonus_usd": 3.5, "total_spend_usd": 16.3,
+                "on_demand_used_usd": 0.0},
+    "source": "api",
+    "as_of": "-900",
+    "latency_ms": 331,
+    "error": null,
+    "detail": {"token_source": "desktop app", "token_expires_at": "+2419200", "cycle_start": "-1641600",
+               "message": null, "auto_message": null}
+  },
+  "grok_usage": {
+    "provider": "grok",
+    "plan": "SuperGrok",
+    "windows": [{"label": "monthly", "used_pct": 18.5, "resets_at": "+1648800"}],
+    "credits": {"monthlyLimit": 1000, "includedUsed": 185},
+    "source": "api",
+    "as_of": "-1800",
+    "latency_ms": 198,
+    "error": null,
+    "detail": {"token_expires_at": "+432000", "auth_mode": "oauth", "response_keys": ["billingCycle", "creditUsagePercent"]}
+  }
+}
