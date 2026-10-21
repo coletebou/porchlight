@@ -88,7 +88,7 @@ def main(argv=None) -> int:
         return 130
     except BrokenPipeError:
         try:
-            sys.stdout = open(os.devnull, "w")  # the interpreter flushes stdout again at exit
+            sys.stdout = open(os.devnull, "w")  # noqa: SIM115 — the interpreter flushes stdout again at exit
         except OSError:
             pass
         return 0
@@ -259,7 +259,7 @@ def list_sources(host, cache, as_json=False) -> int:
         why = registry.state(s, host)
         miss = [k for k in s.needs if not env.get(k)]
         rec = cache.rec(name)
-        rows.append({"name": name, "state": why, "scope": s.scope, "ttl": s.ttl, "needs": list(s.needs),
+        rows.append({"name": name, "state": why, "scope": registry.scope_of(s, host), "ttl": s.ttl, "needs": list(s.needs),
                      "missing": miss, "desc": s.desc, "age": (core.now() - rec["ts"]) if rec else None,
                      "ok": bool(rec and rec.get("ok"))})
     if as_json:

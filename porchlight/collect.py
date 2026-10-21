@@ -33,7 +33,7 @@ def _soft_failure(data) -> bool:
 
 def is_due(src, host, now, cache) -> bool:
     rec = core.read_json(src_path(src.name))
-    if src.scope == "global" and not host.hub:
+    if registry.scope_of(src, host) == "global" and not host.hub:
         hub_rec = (cache.bundle.get("sources") or {}).get(src.name)
         if hub_rec and now - hub_rec.get("ts", 0) < src.fallback:
             return False
@@ -58,6 +58,9 @@ def run_one(src, host, env) -> dict:
             data = src.fn(Ctx(host, env, prev.get("data"), src.config(host)))
             if not _soft_failure(data):
                 rec.update(ok=True, data=data, last_ok=core.now())
+            elif str(data.get("error") or "").startswith("missing env"):
+                # A source that checks its own either/or credentials: as quiet as `needs`.
+                rec.update(ok=False, skip=True, error=secrets.redact(str(data["error"]), env, 200), data=prev.get("data"))
             else:
                 # Keep the last good reading (marked kept) across consecutive soft failures.
                 keep = prev.get("data") if (prev.get("ok") or prev.get("kept")) else None
@@ -76,7 +79,7 @@ def run_one(src, host, env) -> dict:
 
 def _lock():
     core.ensure_dirs()
-    fh = open(core.LOCK_PATH, "a+")
+    fh = open(core.LOCK_PATH, "a+")  # noqa: SIM115 — held for the whole run: it is the lock
     try:
         fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
@@ -178,7 +181,7 @@ def spawn_background(host) -> bool:
             f.write(str(int(core.now())))
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         code = "import sys; sys.path.insert(0, %r); from porchlight.cli import main; sys.exit(main(['collect', '--quiet']))" % root
-        logf = open(core.LOG_PATH, "a")
+        logf = open(core.LOG_PATH, "a")  # noqa: SIM115 — handed to the detached child
         env = dict(os.environ, PORCHLIGHT_HOST=host.name)
         subprocess.Popen([sys.executable, "-I", "-c", code], stdin=subprocess.DEVNULL, stdout=logf, stderr=logf,
                          start_new_session=True, close_fds=True, env=env)

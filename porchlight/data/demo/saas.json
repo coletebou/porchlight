@@ -1,0 +1,171 @@
+{
+  "cloudflare": {
+    "status": "warn",
+    "summary": "3/3 tunnels up, 48k req/24h, 61 5xx (0.1%)",
+    "details": {
+      "auth": "token",
+      "tunnels": {"total": 5, "healthy": 3, "degraded": 0, "down_recent": [], "stale_down": 2,
+                  "by_status": {"healthy": ["acme-edge", "acme-lab", "acme-nas"], "down": ["old-vpn", "test-tunnel"]}},
+      "zones": {"total": 3, "judged": 3, "not_active": []},
+      "traffic_24h": {"requests": 48210, "cached_pct": 61.4, "threats": 37, "http_5xx": 61, "pct_5xx": 0.13,
+                      "uniques": 2093, "zones": 3},
+      "traffic_zones": [
+        {"zone": "example.com", "requests": 41022, "http_5xx": 48, "pct_5xx": 0.12, "level": "ok"},
+        {"zone": "example.org", "requests": 5870, "http_5xx": 13, "pct_5xx": 0.22, "level": "ok"},
+        {"zone": "example.net", "requests": 1318, "http_5xx": 0, "pct_5xx": 0.0, "level": "ok"}
+      ],
+      "email_routing": {
+        "zones": [
+          {"zone": "example.com", "enabled": true, "status": "ready", "last_24h": {"delivered": 14, "dropped": 1}, "level": "ok"},
+          {"zone": "example.org", "enabled": true, "status": "misconfigured", "last_24h": {}, "level": "warn"}
+        ],
+        "enabled": 2, "ready": 1, "last_24h": {"delivered": 14, "dropped": 1}
+      }
+    },
+    "error": null,
+    "alerts": [{"sev": "warn", "msg": "cloudflare: email routing misconfigured on example.org"}]
+  },
+  "vercel": {
+    "status": "ok",
+    "summary": "6 projects, prod ok (4 READY, 1 building)",
+    "details": {
+      "projects": 6,
+      "prod_states": {"READY": 4, "BUILDING": 1, "CANCELED": 1},
+      "failing_24h": [], "failing_7d": [], "stale_errors": [], "building": ["acme-docs"],
+      "prod_by_project": {"acme-web": "READY", "acme-docs": "BUILDING", "acme-dashboard": "READY", "acme-blog": "READY",
+                          "acme-status": "READY", "acme-labs": "CANCELED"}
+    },
+    "error": null
+  },
+  "uptimerobot": {
+    "status": "ok",
+    "summary": "11/12 monitors up, 1 paused",
+    "details": {
+      "api": "v3", "total": 12, "up": 11, "paused": 1, "ignored": 0, "other": 0,
+      "states": {"acme-api": "up", "acme-web": "up", "acme-docs": "up", "acme-status": "up", "acme-auth": "up",
+                 "acme-cdn": "up", "acme-mail": "up", "acme-ws": "up", "acme-billing": "up", "acme-search": "up",
+                 "acme-blog": "up", "acme-legacy": "paused"},
+      "down": []
+    },
+    "error": null
+  },
+  "hetzner": {
+    "status": "ok",
+    "summary": "3/3 servers up, box 62%, ~$61/mo",
+    "details": {
+      "cost_mtd": "not exposed by any Hetzner API; est_monthly is a price-list run-rate",
+      "servers": [
+        {"name": "web-1", "status": "running", "type": "cpx31", "location": "ash", "traffic_out_pct": 2.4, "level": "ok"},
+        {"name": "db-1", "status": "running", "type": "cpx41", "location": "ash", "traffic_out_pct": 0.6, "level": "ok"},
+        {"name": "ci-runner", "status": "running", "type": "cax21", "location": "hel1", "traffic_out_pct": 11.8, "level": "ok"}
+      ],
+      "storage_boxes": [
+        {"name": "backups", "status": "active", "location": "fsn1", "used_pct": 62.3, "used_tib": 0.62, "quota_tib": 1.0, "level": "ok"}
+      ],
+      "est_monthly": 61.37,
+      "currency": "USD"
+    },
+    "error": null
+  },
+  "github": {
+    "status": "warn",
+    "summary": "web: 1 PR(s) need changes",
+    "details": {
+      "token_source": "gh",
+      "user": "octocat",
+      "repos": [
+        {"repo": "acme/api", "label": "api", "branch": "main", "open_prs": 3, "changes_requested": 0, "head_rollup": "SUCCESS",
+         "ci_failing": [], "ci_stale_failing": [], "ci_pending": 0,
+         "last_run": {"workflow": "CI", "conclusion": "success", "at": "2026-01-15T09:12:44Z"}, "level": "ok"},
+        {"repo": "acme/web", "label": "web", "branch": "main", "open_prs": 2, "changes_requested": 1, "head_rollup": "SUCCESS",
+         "ci_failing": [], "ci_stale_failing": [], "ci_pending": 1,
+         "last_run": {"workflow": "Deploy", "conclusion": "success", "at": "2026-01-15T08:40:02Z"}, "level": "ok"},
+        {"repo": "acme/infra", "label": "infra", "branch": "main", "open_prs": 0, "changes_requested": 0, "head_rollup": "SUCCESS",
+         "ci_failing": [], "ci_stale_failing": ["Nightly audit"], "ci_pending": 0,
+         "last_run": {"workflow": "Lint", "conclusion": "success", "at": "2026-01-14T17:03:51Z"}, "level": "ok"}
+      ]
+    },
+    "error": null,
+    "alerts": [{"sev": "warn", "msg": "github: web: 1 PR(s) need changes"}]
+  },
+  "sentry": {
+    "status": "warn",
+    "summary": "3 unresolved issues, 17 events/24h (api)",
+    "details": {"orgs": ["acme"], "projects": 4, "unresolved_issues_24h": 3, "events_24h": 17, "by_project": {"api": 2, "web": 1}},
+    "error": null,
+    "alerts": [{"sev": "warn", "msg": "sentry: 3 unresolved issues, 17 events/24h (api)"}]
+  },
+  "stripe": {
+    "status": "ok",
+    "summary": "live, $1284.50 avail, 42 active, 0 past due",
+    "details": {
+      "key_mode": "rk_live",
+      "available": {"usd": 1284.5},
+      "pending": {"usd": 312.0},
+      "subscriptions": {"by_status": {"active": 42, "canceled": 9, "trialing": 3}, "list_truncated": false,
+                        "mrr_est": {"usd": 1638.0}}
+    },
+    "error": null
+  },
+  "resend": {
+    "status": "ok",
+    "summary": "2/2 domains verified, 41 emails/24h",
+    "details": {
+      "key_valid": true, "can_read": true,
+      "domains": [{"name": "example.com", "status": "verified"}, {"name": "mail.example.org", "status": "verified"}],
+      "emails_24h": {"count": 41, "truncated": false, "by_last_event": {"delivered": 40, "opened": 1}}
+    },
+    "error": null
+  },
+  "langfuse": {
+    "status": "ok",
+    "summary": "v3.120.0 ok; acme 1284tr/$4.12; acme-dev 96tr/$0.31",
+    "details": {
+      "version": "3.120.0",
+      "used_fallback_url": false,
+      "projects": [{"project": "acme", "traces_24h": 1284, "cost_24h_usd": 4.1234},
+                   {"project": "acme-dev", "traces_24h": 96, "cost_24h_usd": 0.3127}]
+    },
+    "error": null
+  },
+  "ai_spend": {
+    "status": "warn",
+    "summary": "MTD A$38.20 O$12.75 | OR $7 left | xAI n/a",
+    "details": {
+      "openrouter": {"status": "warn", "summary": "OpenRouter $7.40 left of $50", "error": null,
+                     "details": {"credits_total_usd": 50.0, "credits_used_usd": 42.6, "remaining_usd": 7.4, "remaining_pct": 14.8,
+                                 "key_limit_usd": null, "key_limit_remaining_usd": null, "key_usage_monthly_usd": 9.81,
+                                 "mgmt_key": false}},
+      "anthropic": {"status": "ok", "summary": "Anthropic MTD $38.20 (through 2026-01-14)", "error": null,
+                    "details": {"mtd_usd": 38.2, "last_bucket": "2026-01-14"}},
+      "openai": {"status": "ok", "summary": "OpenAI MTD $12.75 (through 2026-01-14)", "error": null,
+                 "details": {"mtd_usd": 12.75, "last_bucket": "2026-01-14"}},
+      "xai": {"status": "unknown", "summary": "xAI mgmt key lacks BillingRead permission", "error": "HTTP 403 BillingRead",
+              "details": {"key_valid": true, "billing_read": false, "fix": "grant BillingRead to the management key at console.x.ai"}},
+      "mtd_usd": 50.95
+    },
+    "error": null,
+    "alerts": [{"sev": "warn", "msg": "ai spend: OpenRouter $7.40 left of $50"}]
+  },
+  "aws_account": {
+    "status": "ok",
+    "summary": "2 accounts, 4 EC2 running",
+    "details": {
+      "accounts": [
+        {"profile": "prod", "account_last4": "4821", "principal_type": "assumed-role",
+         "ec2_running": {"us-east-1": {"count": 3, "names": ["api-1", "api-2", "worker-1"]}}, "mtd_unblended_usd": 212.34},
+        {"profile": "dev", "account_last4": "7730", "principal_type": "assumed-role",
+         "ec2_running": {"us-west-2": {"count": 1, "names": ["sandbox"]}}}
+      ],
+      "profiles": 3,
+      "profile_errors": {"legacy": "no-credentials"}
+    },
+    "error": null
+  },
+  "twilio": {
+    "status": "ok",
+    "summary": "$63.80 balance, 12 SMS today",
+    "details": {"balance": {"amount": 63.8, "currency": "USD", "level": "ok"}, "sms_today": 12},
+    "error": null
+  }
+}

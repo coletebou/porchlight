@@ -256,10 +256,10 @@ class Mongo(unittest.TestCase):
         def fake_run(argv, timeout=4.0, env=None, **kw):
             seen["argv"], seen["env"] = argv, env
             return 1, "", "MongoServerError: bad auth for %s" % uri
-        with mock.patch.object(core, "run", side_effect=fake_run), mock.patch.object(core, "which", return_value="/bin/mongosh"):
-            with self.assertRaises(RuntimeError) as cm:
-                system.mongodb(ctx(host(), {"uri_env": "MONGODB_URI", "env_file": "", "database": "", "slow_ms": 3000},
-                                   env={"MONGODB_URI": uri}))
+        with mock.patch.object(core, "run", side_effect=fake_run), mock.patch.object(core, "which", return_value="/bin/mongosh"), \
+                self.assertRaises(RuntimeError) as cm:
+            system.mongodb(ctx(host(), {"uri_env": "MONGODB_URI", "env_file": "", "database": "", "slow_ms": 3000},
+                               env={"MONGODB_URI": uri}))
         self.assertNotIn("hunter2", " ".join(seen["argv"]))
         self.assertEqual(seen["env"]["PORCHLIGHT_MONGO_URI"], uri)
         self.assertNotIn("hunter2", str(cm.exception))

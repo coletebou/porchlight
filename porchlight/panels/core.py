@@ -22,7 +22,7 @@ def p_system(x):
         rows.append(T.dim(label.ljust(6)) + bar + "  " + T.sev("%3d%%" % round(p), T.level_for(p, warn, crit)) + "  " + value)
     load, cores = v["load"][0], v["cores"]
     lp = 100.0 * load / cores
-    lw, lc = 100 * _thr(x, "load_warn", 1.0), 100 * _thr(x, "load_crit", 2.0)
+    lw = 100 * _thr(x, "load_warn", 1.0)  # the meter turns amber at 70% of it, red at it
     rows.append(T.dim("cpu".ljust(6)) + T.bar(lp, bw, lw * 0.7, lw) + "  " +
                 T.sev(fnum(load), T.level_for(lp, lw * 0.7, lw)) + T.dim(" load · %d cores" % cores))
     m = v["mem"]
@@ -193,7 +193,7 @@ def p_network(x):
 def fleet_table(x) -> dict:
     """{host: {"snap", "seen", "ok"}} including this host from live probes."""
     from ..alerts import own as own_alerts
-    mine = own_alerts(x.alerts)  # counted like the peers' snapshots: this host's own alerts only
+    mine = own_alerts(x.alerts, x.host)  # counted like the peers' snapshots: this host's own alerts only
     table = dict(x.cache.fleet_hosts(x.host.hub))
     own = dict(core.read_json(core.SNAPSHOT_PATH) or {})
     own.update({"host": x.host.name, "label": x.host.label, "ts": core.now(),

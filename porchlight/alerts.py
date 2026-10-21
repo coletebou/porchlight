@@ -32,11 +32,13 @@ def probe_all(host, vitals=None, repos=()) -> dict:
     return lv
 
 
-def own(found) -> list:
+def own(found, host=None) -> list:
     """This host's own alerts: live probes plus host-local sources. Excludes
     peer alerts imported from the fleet table and fleet-wide (global) ones."""
-    return [a for a in found if a.get("src") == "live" or
-            (a.get("src") in registry.SOURCES and registry.SOURCES[a["src"]].scope == "local")]
+    def local(name):
+        src = registry.SOURCES.get(name)
+        return src is not None and (registry.scope_of(src, host) if host else src.scope) == "local"
+    return [a for a in found if a.get("src") == "live" or local(a.get("src"))]
 
 
 def _muted(msg: str, patterns) -> bool:
@@ -100,7 +102,7 @@ def gather(host, cache, lv) -> list:
     # Closed dev ports are state, not alerts: a stopped dev server is a choice.
 
     for name, src in registry.SOURCES.items():
-        if not registry.serves(src, host) or (src.scope != "global" and not registry.applies(src, host)):
+        if not registry.serves(src, host) or (registry.scope_of(src, host) != "global" and not registry.applies(src, host)):
             continue
         d = cache.data(name)
         if isinstance(d, dict):

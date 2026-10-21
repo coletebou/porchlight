@@ -18,7 +18,7 @@ def build(host, cache=None) -> dict:
     lv = alerts.probe_all(host)
     v = lv["vitals"]
     pr = cache.data("procs") or {}
-    found = alerts.own(alerts.gather(host, cache, lv))
+    found = alerts.own(alerts.gather(host, cache, lv), host)
     agents = pr.get("agents") or {}
     snap = {
         "v": 1, "host": host.name, "label": host.label, "identity": host.identity, "ts": core.now(),
@@ -40,7 +40,7 @@ def build(host, cache=None) -> dict:
             snap["badge"] = str(d["badge"])[:12]
     shared, used = {}, 0
     for name, src in registry.SOURCES.items():
-        if not src.share or src.scope != "local" or not registry.applies(src, host):
+        if not registry.shares(src, host) or registry.scope_of(src, host) != "local" or not registry.applies(src, host):
             continue
         rec = core.read_json(registry.src_path(name))  # this host's own record, never a re-share
         if not isinstance(rec, dict) or rec.get("data") is None:

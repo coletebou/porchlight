@@ -66,12 +66,12 @@ class ShellHook(unittest.TestCase):
         with mock.patch.object(core, "HOME", home), contextlib.redirect_stdout(io.StringIO()):
             install.install_shell("bash")
             install.install_shell("bash")
-            text = open(rc_path).read()
+            text = core.read_text(rc_path)
             self.assertEqual(text.count(install.MARK_BEGIN), 1)
             self.assertTrue(text.startswith("export A=1\n"))
             self.assertIn("PORCHLIGHT_SHOWN", text)
             install.uninstall_shell("bash")
-            self.assertEqual(open(rc_path).read(), "export A=1\n")
+            self.assertEqual(core.read_text(rc_path), "export A=1\n")
 
     def test_snippets(self):
         self.assertIn("status is-interactive", install.shell_snippet("fish"))

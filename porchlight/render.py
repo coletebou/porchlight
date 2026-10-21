@@ -391,7 +391,7 @@ def compact_mode(host, W, only) -> bool:
         return True
     if mode == "full":
         return False
-    return W < int(host.cfg.get("layout.compact_width", 100))
+    return int(host.cfg.get("layout.compact_width", 100)) > W
 
 
 def build_panels(ctx, keys) -> list:

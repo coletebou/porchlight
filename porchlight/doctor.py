@@ -77,7 +77,7 @@ def run(host, cache, plugin_errors=()) -> int:
                 note = "missing " + ", ".join(miss)
         due = is_due(s, host, now, cache)
         print("%-16s %-6s %6s %8s  %s %7s  %s" % (
-            name[:16], s.scope if origin == "local" else "hub", core.human_age(s.ttl),
+            name[:16], registry.scope_of(s, host) if origin == "local" else "hub", core.human_age(s.ttl),
             core.human_age(age) if age is not None else "-", T.pad(T.c(state, color), 5),
             ms if origin == "local" and rec else "", T.dim(note[:96]) + (T.c(" due", "sky") if due else "")))
     if off:

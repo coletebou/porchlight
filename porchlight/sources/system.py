@@ -155,7 +155,7 @@ def procs(ctx):
     rows = ps_rows()
     me = {"total": len(rows), "zombies": 0, "agents": {}, "mcp": {"count": 0, "orphans": 0}, "tunnels": []}
     orphan_age = int(cfg.get("orphan_age", 300))
-    for pid, ppid, user, rss, stat, args, has_tty, age in rows:
+    for pid, ppid, _user, _rss, stat, args, has_tty, age in rows:
         head = args.split(" -", 1)[0]
         if "Z" in stat:
             me["zombies"] += 1
@@ -299,7 +299,7 @@ def quotes(ctx):
             seen.add(text.lower())
             items.append(text)
     if ctx.cfg.get("zenquotes", True):
-        for i in range(max(1, min(5, want // 50))):  # 50 quotes per call; be polite between calls
+        for _ in range(max(1, min(5, want // 50))):  # 50 quotes per call; be polite between calls
             try:
                 r = ctx.http("https://zenquotes.io/api/quotes", timeout=6)
             except Exception:  # noqa: BLE001
@@ -404,9 +404,8 @@ def cert_days(name: str, addr: str, port: int, timeout: float = 5.0) -> float:
     """Days until the certificate served at addr:port for SNI `name` expires."""
     import ssl  # ~4 ms of import the login render never needs
     sctx = ssl.create_default_context()
-    with socket.create_connection((addr, port), timeout=timeout) as sock:
-        with sctx.wrap_socket(sock, server_hostname=name) as ss:
-            cert = ss.getpeercert()
+    with socket.create_connection((addr, port), timeout=timeout) as sock, sctx.wrap_socket(sock, server_hostname=name) as ss:
+        cert = ss.getpeercert()
     return (ssl.cert_time_to_seconds(cert["notAfter"]) - core.now()) / 86400
 
 

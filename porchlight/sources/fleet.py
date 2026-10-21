@@ -28,8 +28,9 @@ def remote_command(cache_dir: str = "") -> str:
 
 def build_bundle(host, peers_prev: dict) -> dict:
     srcs = {}
+    from ..registry import scope_of
     for name, s in SOURCES.items():
-        if s.scope == "global":
+        if scope_of(s, host) == "global":
             rec = core.read_json(src_path(name))
             if rec:
                 srcs[name] = rec

@@ -157,7 +157,11 @@ def main():
     ap.add_argument("--font", type=float, default=14.0)
     ap.add_argument("--cols", type=int, default=0, help="pad the canvas to this many columns")
     a = ap.parse_args()
-    text = open(a.file, encoding="utf-8").read() if a.file else sys.stdin.read()
+    if a.file:
+        with open(a.file, encoding="utf-8") as f:
+            text = f.read()
+    else:
+        text = sys.stdin.read()
     rows = parse(text)
     while rows and not rows[-1]:
         rows.pop()

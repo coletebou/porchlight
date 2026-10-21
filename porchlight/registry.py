@@ -101,6 +101,18 @@ def state(src, host) -> str:
     return "on"
 
 
+def scope_of(src, host) -> str:
+    """The source's scope here: [sources.<name>] scope = "local"|"global" overrides the default."""
+    v = src.config(host).get("scope")
+    return v if v in ("local", "global") else src.scope
+
+
+def shares(src, host) -> bool:
+    """Whether this host ships the source's record to the hub in its snapshot (share = true)."""
+    v = src.config(host).get("share")
+    return v if isinstance(v, bool) else src.share
+
+
 def serves(src, host) -> bool:
     """The source belongs to this host's identity (alerts from it may show here)."""
     return state(src, host) not in ("identity", "not allowed", "denied")
@@ -183,7 +195,7 @@ class Cache:
         return (self.bundle.get("fleet") or {}).get("hosts") or {}
 
 
-COMMON_SETTINGS = {"enabled", "identities", "hosts", "paths"}
+COMMON_SETTINGS = {"enabled", "identities", "hosts", "paths", "scope", "share"}
 
 
 def check_settings(cfg) -> list:
