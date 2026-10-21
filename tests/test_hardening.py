@@ -113,7 +113,15 @@ class Services(unittest.TestCase):
 
     def test_named_ports_are_not_probed_at_login(self):
         with mock.patch("socket.create_connection", side_effect=AssertionError("network at login")):
-            self.assertEqual(live.ports([(5432, "db", "db.example.com")]), [(5432, "db", False)])
+            self.assertEqual(live.ports([(5432, "db", "db.example.com")]), [(5432, "db", None)])
+
+    def test_failed_systemctl_answer_is_not_cached(self):
+        support.clear_cache()
+        h = host("")
+        with mock.patch.object(core, "IS_MAC", False), mock.patch.object(core, "which", return_value="/bin/systemctl"), \
+                mock.patch.object(live, "_systemctl_show", return_value={}), mock.patch.object(live, "_expand_globs", return_value={}):
+            live.units(h)
+        self.assertIsNone(live._auto_known())
 
 
 class Certs(unittest.TestCase):
@@ -135,12 +143,21 @@ class Backups(unittest.TestCase):
     def test_learned_cadence_catches_missed_runs(self):
         now = time.time()
         cfg = {"units": ["nightly"], "files": []}
-        prev = {"rows": [{"name": "nightly", "last": now - 4 * 86400}], "cadence": {"nightly": 86400}}
+        prev = {"rows": [{"name": "nightly", "last": now - 4 * 86400}], "gaps": {"nightly": [86400, 86400]}}
         runs = {"nightly": {"result": "success", "last": now - 3 * 86400, "next": now + 3600}}
         with mock.patch.object(system, "unit_runs", return_value=runs), mock.patch.object(core, "which", return_value="/bin/x"):
             d = system.backups(ctx(host(), cfg, prev=prev))
         self.assertTrue(any("overdue" in a["msg"] for a in d.get("alerts") or []))
-        self.assertEqual(d["cadence"]["nightly"], 86400)
+        self.assertEqual(d["gaps"]["nightly"], [86400, 86400, 86400])
+
+    def test_one_catch_up_run_does_not_poison_the_cadence(self):
+        now = time.time()
+        cfg = {"units": ["nightly"], "files": []}
+        prev = {"rows": [{"name": "nightly", "last": now - 7200}], "gaps": {"nightly": [86400, 86400]}}
+        runs = {"nightly": {"result": "success", "last": now - 3600, "next": now + 82800}}  # a manual run an hour later
+        with mock.patch.object(system, "unit_runs", return_value=runs), mock.patch.object(core, "which", return_value="/bin/x"):
+            d = system.backups(ctx(host(), cfg, prev=prev))
+        self.assertFalse([a for a in d.get("alerts") or [] if "overdue" in a["msg"]])
 
 
 class Money(unittest.TestCase):

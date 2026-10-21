@@ -79,7 +79,7 @@ def _make(e):
         if rc in (124, 126, 127):
             raise RuntimeError(err.strip()[:160] or "rc %d" % rc)
         from .. import secrets
-        d = parse(secrets.mask(out, ctx.env), rc, str(e.get("format", "auto")))  # a check may echo a credential
+        d = _masked(parse(secrets.mask(out, ctx.env), rc, str(e.get("format", "auto"))), ctx.env)  # a check may echo a credential
         if not d.get("alerts") and d["status"] in ("warn", "crit") and e.get("alert", True):
             d["alerts"] = [{"sev": d["status"], "msg": "%s: %s" % (e["name"], d.get("summary") or "status %s" % d["status"])}]
         if rc not in (0, 1, 2, 3) and not out.strip():
@@ -87,6 +87,16 @@ def _make(e):
         return d
     fn.__doc__ = str(e.get("desc") or "custom: %s" % (e["command"] if isinstance(e["command"], str) else " ".join(e["command"])))[:100]
     return fn
+
+
+def _masked(obj, env):
+    """Mask every decoded string: a JSON escape (\\u0041, \\/) hides a value from the raw-text pass."""
+    from .. import secrets
+    if isinstance(obj, dict):
+        return {k: _masked(v, env) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_masked(v, env) for v in obj]
+    return secrets.mask(obj, env) if isinstance(obj, str) else obj
 
 
 def register(host) -> None:

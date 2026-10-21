@@ -486,7 +486,7 @@ def backups(ctx):
     now = core.now()
     rows, alerts = [], []
     prev_last = {r.get("name"): r.get("last") or 0 for r in (ctx.prev or {}).get("rows") or []}
-    cadence = dict((ctx.prev or {}).get("cadence") or {})
+    gaps_prev, gaps_out = (ctx.prev or {}).get("gaps") or {}, {}
     units = [{"unit": u} if isinstance(u, str) else u for u in ctx.cfg.get("units") or []]
     units = [u for u in units if isinstance(u, dict) and u.get("unit")]
     runs = unit_runs([u["unit"] for u in units]) if units and core.which("systemctl") else {}
@@ -501,11 +501,16 @@ def backups(ctx):
         last, nxt = r.get("last") or r.get("ended") or 0, r.get("next") or 0
         # next - last stretches by every missed run (a box that was off for days), so the
         # smallest gap seen between two real runs is the cadence once there is one.
-        if last and prev_last.get(name) and last > prev_last[name] + 60:
-            gap = last - prev_last[name]
-            cadence[name] = min(cadence.get(name) or gap, gap)
+        # The median of the last few gaps: one manual or catch-up run cannot poison it,
+        # and old gaps roll off when a schedule changes.
+        gaps = [g for g in (gaps_prev.get(name) or []) if isinstance(g, (int, float))]
+        if last and prev_last.get(name) and last > prev_last[name] + 600:
+            gaps = (gaps + [last - prev_last[name]])[-5:]
+        if gaps:
+            gaps_out[name] = gaps
         derived = (nxt - last) if (nxt and last and nxt > last) else 86400
-        interval = float(u.get("every_hours", 0)) * 3600 or (min(derived, cadence[name]) if cadence.get(name) else derived)
+        learned = sorted(gaps)[len(gaps) // 2] if len(gaps) >= 2 else None
+        interval = float(u.get("every_hours", 0)) * 3600 or (min(derived, learned) if learned else derived)
         ok = r.get("result") in ("success", None, "")
         overdue = bool(last) and now - last > interval * 1.5 + 3600
         rows.append({"name": name, "ok": ok and not overdue, "last": last, "next": nxt, "result": r.get("result"),
@@ -531,7 +536,7 @@ def backups(ctx):
             alerts.append({"sev": "warn", "msg": "backup %s: nothing at %s" % (name, f["path"])})
         elif not ok:
             alerts.append({"sev": "warn", "msg": "backup %s is %s old (max %dh)" % (name, core.human_age(now - mt), max_h)})
-    data = {"rows": rows, "cadence": cadence}
+    data = {"rows": rows, "gaps": gaps_out}
     if alerts:
         data["alerts"] = alerts
     return data

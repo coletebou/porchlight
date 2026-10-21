@@ -47,8 +47,9 @@ STRIPE = "https://api.stripe.com/v1"
 _MONTHLY = {"day": 30.0, "week": 52.0 / 12.0, "month": 1.0, "year": 1.0 / 12.0}
 
 
-# Stripe amounts are in each currency's minor unit: most have 100, some none, a few 1000.
-_ZERO_DECIMAL = {"bif", "clp", "djf", "gnf", "jpy", "kmf", "krw", "mga", "pyg", "rwf", "ugx", "vnd", "vuv", "xaf", "xof", "xpf"}
+# Stripe amounts are in each currency's minor unit: most have 100, some none, a few 1000
+# (UGX is zero-decimal on paper but two-decimal in Stripe's API, so it stays at 100).
+_ZERO_DECIMAL = {"bif", "clp", "djf", "gnf", "jpy", "kmf", "krw", "mga", "pyg", "rwf", "vnd", "vuv", "xaf", "xof", "xpf"}
 _THREE_DECIMAL = {"bhd", "jod", "kwd", "omr", "tnd"}
 
 

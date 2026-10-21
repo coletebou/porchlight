@@ -183,7 +183,8 @@ def p_network(x):
         items = []
         for port, label, is_open in ports:
             via = T.c(" " + T.g("via"), "sky") if str(port) in fwd else ""
-            items.append(T.dot("ok" if is_open else "unknown") + " " + (label if is_open else T.dim(label)) + T.dim(" :%d" % port) + via)
+            mark = "" if is_open is not None else T.dim(" ?")  # a named host is not probed at login
+            items.append(T.dot("ok" if is_open else "unknown") + " " + (label if is_open else T.dim(label)) + T.dim(" :%d" % port) + via + mark)
         rows += [kv("ports" if i == 0 else "", it, 10) for i, it in enumerate(cells(items, x.cw - 11, 16))]
     if not rows:
         return None

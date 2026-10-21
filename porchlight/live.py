@@ -239,7 +239,7 @@ def units(host) -> list:
                 out_units.append((u, label, s))
     st = _systemctl_show([u for u, _, s in out_units if s == "system"])
     st.update({("user:" + k): v for k, v in _systemctl_show([u for u, _, s in out_units if s == "user"], user=True).items()})
-    if rescan:  # remember which candidates exist (one per real unit: sshd and ssh are aliases)
+    if rescan and st:  # remember which candidates exist (an empty answer is a systemctl failure, not a verdict)
         keep, ids = [], set()
         for unit, label, _scope in out_units:
             info = st.get(unit) or st.get(unit.rsplit(".", 1)[0]) or {}
@@ -366,11 +366,11 @@ def ports(items) -> list:
     import ipaddress
     out = []
     for port, label, addr in items:
+        addr = "127.0.0.1" if addr == "localhost" else addr
         try:
-            if addr != "localhost":
-                ipaddress.ip_address(addr)  # a name would mean DNS at login; use [sources.reach] for remote checks
-        except ValueError:
-            out.append((port, label, False))
+            ipaddress.ip_address(addr)
+        except ValueError:  # a name would mean DNS at login: not probed (None), [sources.reach] checks remote ones
+            out.append((port, label, None))
             continue
         try:
             socket.create_connection((addr, port), timeout=0.2).close()
