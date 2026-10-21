@@ -297,6 +297,28 @@ class Transport(unittest.TestCase):
         self.assertEqual(kinds, [["NoRedirect"], ["HTTPRedirectHandler"]])
 
 
+class AutoUnits(unittest.TestCase):
+    def test_present_units_are_remembered(self):
+        from unittest import mock
+        from porchlight import live
+        support.clear_cache()
+        calls = []
+
+        def show(units, user=False):
+            calls.append(list(units))
+            return {"ssh.service": {"Id": "ssh.service", "LoadState": "loaded", "ActiveState": "active"},
+                    "ssh": {"Id": "ssh.service", "LoadState": "loaded", "ActiveState": "active"}} if not user else {}
+        h = host("")
+        with mock.patch.object(core, "which", return_value="/bin/systemctl"), \
+                mock.patch.object(live, "_systemctl_show", side_effect=show), \
+                mock.patch.object(live, "_expand_globs", return_value={}), mock.patch.object(core, "IS_MAC", False):
+            first = live.units(h)
+            second = live.units(h)
+        self.assertEqual([r[0] for r in first], [r[0] for r in second])
+        self.assertGreater(len(calls[0]), 20)        # the first login asks about every candidate
+        self.assertEqual(calls[2], ["ssh.service"])  # later ones only about what exists (calls[1] is the user scope)
+
+
 class Secrets(unittest.TestCase):
     def test_redact_patterns(self):
         env = {"STRIPE_SECRET_KEY": "sk_live_" + "9" * 30, "PLAIN": "default"}
@@ -399,6 +421,8 @@ class Rendering(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         import shutil
+        from porchlight import demo
+        demo.restore()  # the demo swaps the live probes for fixtures; later tests need the real ones
         shutil.rmtree(cls.tmp, ignore_errors=True)
         core.use_cache_dir(cls.saved)
 

@@ -136,8 +136,21 @@ def _relative(v, now):
     return v
 
 
+_SAVED = {}
+
+
+def restore() -> None:
+    """Put the real live probes and cache directory back (demo.build swaps them)."""
+    from . import live
+    for name, fn in _SAVED.pop("live", {}).items():
+        setattr(live, name, fn)
+    if "cache" in _SAVED:
+        core.use_cache_dir(_SAVED.pop("cache"))
+
+
 def _patch_live(now: float):
     from . import live, theme as T
+    _SAVED.setdefault("live", {n: getattr(live, n) for n in ("vitals", "units", "failed_units", "launchd", "tmux", "ports", "repo")})
 
     def vitals(host, disks=True):
         return {"cores": 12, "ip": "192.168.1.20", "load": [3.18, 2.9, 2.4], "os": "Debian GNU/Linux 12 (bookworm)",
@@ -166,6 +179,7 @@ def build(theme=None):
     """Write the demo cache and config; returns (host, cache, tmpdir)."""
     from . import config, hosts, registry, theme as T
     tmp = tempfile.mkdtemp(prefix="porchlight-demo-")
+    _SAVED.setdefault("cache", core.CACHE_DIR)
     core.use_cache_dir(os.path.join(tmp, "cache"))
     core.ensure_dirs()
     now = core.now()
@@ -213,6 +227,7 @@ def run(flags, opts, words) -> int:
         only = [w for w in words if not w.startswith("-")] or None
         print(render.render(host, cache, width=width, only=only, compact=compact_flag(flags)))
     finally:
+        restore()
         if "--keep" in flags:
             print("demo cache kept in %s" % tmp)
         else:

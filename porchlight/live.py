@@ -194,13 +194,30 @@ def _systemctl_show(units, user=False) -> dict:
     return res
 
 
+AUTO_RESCAN = 6 * 3600  # how long the list of auto-detected units present on this box is trusted
+
+
+def _auto_path() -> str:
+    return os.path.join(core.STATE_DIR, "auto_units.json")
+
+
+def _auto_known():
+    """The AUTO_UNITS this box actually has, from the last scan: asking systemd
+    about ~30 candidate units costs tens of ms per login, two present ones a few."""
+    d = core.read_json(_auto_path())
+    if isinstance(d, dict) and core.now() - float(d.get("ts") or 0) < AUTO_RESCAN and isinstance(d.get("units"), list):
+        return [tuple(x) for x in d["units"] if isinstance(x, list) and len(x) == 2]
+    return None
+
+
 def unit_list(host) -> list:
     """(unit, label, scope) to show: the configured ones, else the AUTO_UNITS present."""
     if host.units:
         return host.units
     if not host.auto_services or core.IS_MAC or not core.which("systemctl"):
         return []
-    return [(u, label, "system") for u, label in AUTO_UNITS]
+    known = _auto_known()
+    return [(u, label, "system") for u, label in (AUTO_UNITS if known is None else known)]
 
 
 def units(host) -> list:
@@ -208,6 +225,7 @@ def units(host) -> list:
     wanted = unit_list(host)
     if not wanted or core.IS_MAC:
         return []
+    rescan = not host.units and _auto_known() is None
     out_units = []
     for scope in ("system", "user"):
         names = [u for u, _, s in wanted if s == scope]
@@ -221,6 +239,18 @@ def units(host) -> list:
                 out_units.append((u, label, s))
     st = _systemctl_show([u for u, _, s in out_units if s == "system"])
     st.update({("user:" + k): v for k, v in _systemctl_show([u for u, _, s in out_units if s == "user"], user=True).items()})
+    if rescan:  # remember which candidates exist (one per real unit: sshd and ssh are aliases)
+        keep, ids = [], set()
+        for unit, label, _scope in out_units:
+            info = st.get(unit) or st.get(unit.rsplit(".", 1)[0]) or {}
+            if info.get("LoadState") not in (None, "", "not-found") and info.get("Id") not in ids:
+                ids.add(info.get("Id"))
+                keep.append([info.get("Id") or unit, label])
+        try:
+            core.ensure_dirs()
+            core.write_json_atomic(_auto_path(), {"ts": core.now(), "units": keep})
+        except OSError:
+            pass
     groups, seen = {}, set()  # label → unit states, in config order
     for unit, label, scope in out_units:
         key = ("user:" + unit) if scope == "user" else unit
