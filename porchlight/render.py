@@ -356,7 +356,7 @@ def footer(host, cache, W, t0) -> list:
         right = T.dim("rendered %dms" % int((time.monotonic() - t0) * 1000))
     if left or right:
         gap = W - 1 - T.width(left) - T.width(right)
-        out.append(" " + left + (" " * gap + right if gap > 2 else ""))
+        out.append(" " + T.fit(left + (" " * gap + right if gap > 2 else ""), W - 1))
     return out
 
 
@@ -439,9 +439,10 @@ def render(host, cache, width=None, only=None, login=False, compact=None) -> str
         out.append("")
         if compact:
             more = len([k for k in host.panels if k not in keys and k in panels.BUILDERS])
-            out.append(" " + T.dim("compact view · ") + T.c("porchlight all", "slate") +
-                       T.dim(" for %s" % ("every panel" if more else "the full layout") + " (or widen the window)"))
+            out.append(" " + T.fit(T.dim("compact view · ") + T.c("porchlight all", "slate") +
+                                   T.dim(" for %s" % ("every panel" if more else "the full layout") + " (or widen the window)"), W - 1))
         else:
             out += footer(host, cache, W, t0)
-    return "\n".join(out)
+    text = "\n".join(out)
+    return T.asciify(text) if T.ASCII else text
 

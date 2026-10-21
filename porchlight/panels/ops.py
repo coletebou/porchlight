@@ -32,7 +32,7 @@ def p_health(x):
         lvl = T.worst(lvl, m.get("status", "unknown"))
         rows.append(kv("mongodb", T.dot(m.get("status", "unknown")) + " " + m["summary"], 9))
     dr = x.data("drift")
-    for r in (dr or {}).get("rows") or []:
+    for i, r in enumerate((dr or {}).get("rows") or []):
         if r.get("ok"):
             txt = T.dot("ok") + " " + r["label"] + T.dim(" @ %s = %s" % (r.get("deployed"), r.get("ref")))
         elif r.get("error"):
@@ -43,7 +43,7 @@ def p_health(x):
                 ("%d behind %s" % (behind, r.get("ref"))) if behind and behind > 0 else "≠ %s" % r.get("ref"), "amber") + \
                 T.dim(" (%s → %s)" % (r.get("deployed"), r.get("want")))
             lvl = T.worst(lvl, "warn")
-        rows.append(kv("deploy", txt, 9))
+        rows.append(kv("deploy" if i == 0 else "", txt, 9))
     if not rows:
         return None
     return Panel("health", "HEALTH", rows, lvl, x.stale_note("health", 4, 900) if h else "")
@@ -83,21 +83,27 @@ def p_backups(x):
     return Panel("backups", "BACKUPS", rows, lvl)
 
 
+def _k(n) -> str:
+    n = float(n or 0)
+    return ("%.1fk" % (n / 1000)).replace(".0k", "k") if n >= 1000 else "%dB" % n
+
+
 @panel("files", title="FILES")
 def p_files(x):
     d = x.data("files")
     if not d or not d.get("rows"):
         return None
     rows, lvl = [], "ok"
+    lw = max(10, min(22, max(T.width(r["label"]) for r in d["rows"][:8]) + 1))
     for r in d["rows"][:8]:
         p = r.get("pct", 0)
         l2 = T.level_for(p, 90, 100)
         lvl = T.worst(lvl, l2)
-        cap = "/".join(s for s in ((core.human_bytes(r["max_bytes"]) if r.get("max_bytes") else ""),
-                                   ("%dL" % r["max_lines"] if r.get("max_lines") else "")) if s)
-        rows.append(T.pad(T.c(r["label"], "fg"), 22) + " " + T.bar(p, 10, 90, 100) + " " +
-                    T.sev("%3d%%" % p, l2) + T.dim("  %s · %dL" % (core.human_bytes(r["bytes"]), r["lines"])) +
-                    (T.dim(" of " + cap) if cap else "") + (T.dim(" · " + ago(r["mtime"])) if r.get("mtime") else ""))
+        # Budgets are written in plain bytes and lines, so show them that way (k = 1000).
+        size = "%s/%s" % (_k(r["bytes"]), _k(r["max_bytes"])) if r.get("max_bytes") else _k(r["bytes"])
+        lines = ("%d/%dL" % (r["lines"], r["max_lines"])) if r.get("max_lines") else "%dL" % r["lines"]
+        rows.append(T.pad(T.c(r["label"], "fg"), lw) + " " + T.bar(p, 10, 90, 100) + " " + T.sev("%3d%%" % p, l2) +
+                    T.dim("  %s · %s" % (size, lines)) + (T.dim(" · " + ago(r["mtime"], "")) if r.get("mtime") else ""))
     if len(d["rows"]) > 8:
         rows.append(T.dim("%s %d more files" % (T.ellipsis(), len(d["rows"]) - 8)))
     return Panel("files", "FILES", rows, lvl, "%d tracked" % d.get("files", 0))

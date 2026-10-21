@@ -79,7 +79,20 @@ def _due_any(host, cache) -> bool:
 
 
 def main(argv=None) -> int:
-    argv = list(sys.argv[1:] if argv is None else argv)
+    """The console entry point. Ctrl-C and a closed pipe (`porchlight | head`) exit quietly."""
+    try:
+        return _main(list(sys.argv[1:] if argv is None else argv))
+    except KeyboardInterrupt:
+        return 130
+    except BrokenPipeError:
+        try:
+            sys.stdout = open(os.devnull, "w")  # the interpreter flushes stdout again at exit
+        except OSError:
+            pass
+        return 0
+
+
+def _main(argv) -> int:
     flags, opts, words = parse(argv)
     if "-h" in flags or "--help" in flags or (words and words[0] == "help"):
         print(__doc__.strip())
@@ -159,8 +172,8 @@ def main(argv=None) -> int:
 
     from . import panels, render
     only = None
-    if cmd == "all":
-        os.environ["PORCHLIGHT_FULL"] = "1"
+    full = cmd == "all"
+    if full:
         cmd = "show"
     if cmd == "panels":
         return list_panels(host, cache)
@@ -172,7 +185,7 @@ def main(argv=None) -> int:
             print("porchlight: unknown command or panel: %s (porchlight -h)" % ", ".join(unknown), file=sys.stderr)
             return 2
     width = int(opts["--width"]) if (opts.get("--width") or "").isdigit() else None
-    compact = True if "--compact" in flags else (False if "--full" in flags else None)
+    compact = True if "--compact" in flags else (False if "--full" in flags or full else None)
     login = "--login" in flags
     sys.stdout.write(render.render(host, cache, width=width, only=only, login=login, compact=compact) + "\n")
     sys.stdout.flush()
@@ -236,9 +249,4 @@ def list_panels(host, cache) -> int:
 
 
 if __name__ == "__main__":
-    try:
-        sys.exit(main())
-    except KeyboardInterrupt:
-        sys.exit(130)
-    except BrokenPipeError:
-        sys.exit(0)
+    sys.exit(main())

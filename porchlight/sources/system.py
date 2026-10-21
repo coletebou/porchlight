@@ -152,7 +152,10 @@ def procs(ctx):
         if ".app/" in args and "/Contents/MacOS/" in args:
             hit = None  # desktop apps (Claude.app, Codex.app) are not CLI agents
         else:
-            hit = next((n for n, rx in matchers.items() if rx.search(head)), None)
+            # The command before its first flag, plus the first three words for
+            # interpreter launches ("python3 -m aider", "node …/claude").
+            lead = " ".join(args.split()[:3])
+            hit = next((n for n, rx in matchers.items() if rx.search(head) or rx.search(lead)), None)
         if hit and not head.startswith(("node -e", "grep ")):
             a = me["agents"].setdefault(hit, {"count": 0, "orphans": [], "sub": {}})
             a["count"] += 1

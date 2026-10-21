@@ -58,8 +58,8 @@ def parse(out: str, rc: int, fmt: str = "auto") -> dict:
             if d.get("badge"):
                 res["badge"] = str(d["badge"])[:12]
             return res
-        if fmt == "json":
-            return {"status": "unknown", "summary": "", "rows": [], "error": "output is not a JSON object"}
+    if fmt == "json":
+        return {"status": "unknown", "summary": "", "rows": [], "error": "output is not a JSON object"}
     lines = [ln.rstrip() for ln in out.splitlines() if ln.strip()]
     st = _NAGIOS.get(rc, "unknown")
     if fmt == "lines":

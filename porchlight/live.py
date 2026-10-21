@@ -12,7 +12,7 @@ import platform
 import re
 import socket
 
-from . import core
+from . import core, theme as T
 
 # Units shown when [services] lists none: whichever of these exist on the box.
 AUTO_UNITS = [
@@ -245,7 +245,7 @@ def units(host) -> list:
         else:
             detail = present[0].get("SubState") or present[0].get("ActiveState") or "?"
         if restarts >= 3 and lvl == "ok":
-            detail = (detail + " ↻%d" % restarts).strip()
+            detail = (detail + " %s%d" % (T.g("reset"), restarts)).strip()
         out.append((label, lvl, detail, [i.get("Id", "") for i in present]))
     return out
 

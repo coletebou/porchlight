@@ -383,6 +383,27 @@ _ASCII_GLYPHS = {
 }
 
 
+# One-for-one ASCII stand-ins keep every column where it was.
+_ASCII_MAP = {"·": ".", "•": "*", "—": "-", "–": "-", "→": ">", "←": "<", "↑": "^", "↓": "v", "↻": "@", "⇄": "~",
+              "…": ".", "°": "o", "✔": "+", "✖": "x", "▲": "!", "●": "*", "○": "o", "◌": ".", "◆": "*", "▌": "|",
+              "━": "#", "╸": "+", "─": "-", "❝": '"', "❞": '"', "▶": ">", "⏸": "=", "×": "x", "≠": "!",
+              "“": '"', "”": '"', "‘": "'", "’": "'", "█": "#", "▀": "^", "▄": "_", "µ": "u"}
+
+
+def asciify(text: str) -> str:
+    """Make output pure ASCII without moving a single column: mapped glyphs
+    become one character, anything else becomes '?' per display cell."""
+    out = []
+    for i, ch in enumerate(text):
+        if ord(ch) < 128:
+            out.append(ch)
+        elif ch in _ASCII_MAP:
+            out.append(_ASCII_MAP[ch])
+        else:
+            out.append("?" * _cw(ch, text[i + 1] if i + 1 < len(text) else ""))
+    return "".join(out)
+
+
 def g(name: str) -> str:
     return (_ASCII_GLYPHS if ASCII else _GLYPHS).get(name, "?")
 

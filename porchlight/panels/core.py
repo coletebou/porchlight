@@ -45,9 +45,10 @@ def p_system(x):
     if procs:
         tail.append("%s procs" % procs)
     tail.append("up " + core.human_age(v.get("uptime", 0)))
-    if core.IS_LINUX and core.which("systemctl"):
+    if "#linux" in x.host.tags and (core.which("systemctl") or x.lv.get("failed")):
         failed = x.lv.get("failed") or []
-        tail.append(T.c("%d failed units" % len(failed), "red") if failed else T.c("0 failed units", "green"))
+        tail.append(T.c("%d failed unit%s" % (len(failed), "" if len(failed) == 1 else "s"), "red") if failed
+                    else T.c("0 failed units", "green"))
     rows.append(SEP.join(tail))
     lvl = T.worst(*[T.level_for(d["pct"], dw, dc) for d in v["disks"]])
     return Panel("system", "SYSTEM", rows, lvl)
@@ -73,9 +74,9 @@ def p_services(x):
         items.append(T.dot(lv) + " " + (T.c(label, "fg") if lv == "ok" else T.sev(label, lv)) +
                      ((" " + T.dim(detail)) if detail else ""))
         lvl = T.worst(lvl, lv if lv != "unknown" else "ok")
-    if core.IS_MAC:
+    if "#mac" in x.host.tags:  # no systemd units to show tailscaled and sshd: ask them directly
         ts = x.data("tailscale") or {}
-        if ts.get("installed"):
+        if ts.get("installed") and not any(i[0] == "tailscale" for i in x.lv.get("launchd") or []):
             ok = ts.get("state") == "Running"
             items.append(T.dot("ok" if ok else "unknown") + " tailscale" + ("" if ok else T.dim(" " + str(ts.get("state")))))
         if x.cfg.get("services.remote_login", True):
@@ -284,7 +285,7 @@ def repo_rows(r, label: str, untracked: int = 0) -> list:
     if r["behind"]:
         bits.append(T.c(T.g("down") + "%d" % r["behind"], "rose"))
     if r.get("last"):
-        bits.append(T.dim("last commit %s" % core.human_age(core.now() - r["last"], " ago")))
+        bits.append(T.dim(core.human_age(core.now() - r["last"], " ago")))
     return [T.c(label, "fg") + T.dim(" @ ") + T.c(r["branch"], "violet") + "  " + SEP.join(bits)]
 
 
