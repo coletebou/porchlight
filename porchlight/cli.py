@@ -15,6 +15,8 @@
   porchlight uninstall ...   remove the timer or the shell hook
   porchlight demo            a sample fleet dashboard, no setup needed
   porchlight themes          preview every theme
+  porchlight watch [secs]    a live dashboard that redraws itself (a wall or a spare tab)
+  porchlight badge           "✖2 ▲3" for a tmux status line or prompt (instant: no probes)
   porchlight top [N]         the processes using the most CPU and memory
   porchlight label           this machine's display label (for prompts)
   porchlight version
@@ -118,6 +120,8 @@ def _main(argv) -> int:
     if cmd == "label":
         print(host.label)
         return 0
+    if cmd == "badge":
+        return badge(host, flags)
     if cmd == "init":
         from . import wizard
         return wizard.run(host, flags, opts)
@@ -177,7 +181,7 @@ def _main(argv) -> int:
         cmd = "show"
     if cmd == "panels":
         return list_panels(host, cache)
-    if cmd != "show":
+    if cmd not in ("show", "watch"):
         known = set(panels.BUILDERS)
         only = [w for w in words if w in known]
         unknown = [w for w in words if w not in known]
@@ -186,6 +190,9 @@ def _main(argv) -> int:
             return 2
     width = int(opts["--width"]) if (opts.get("--width") or "").isdigit() else None
     compact = True if "--compact" in flags else (False if "--full" in flags or full else None)
+    if cmd == "watch":
+        secs = float(words[1]) if len(words) > 1 and words[1].replace(".", "", 1).isdigit() else 10.0
+        return watch(host, max(1.0, secs), width, compact)
     login = "--login" in flags
     sys.stdout.write(render.render(host, cache, width=width, only=only, login=login, compact=compact) + "\n")
     sys.stdout.flush()
@@ -193,6 +200,54 @@ def _main(argv) -> int:
         from . import collect
         collect.spawn_background(host)
     return 0
+
+
+def badge(host, flags) -> int:
+    """Alert counts from the last collector snapshot: no probes, no source imports,
+    fast enough for a tmux status line that runs it every few seconds."""
+    from . import core, theme as T
+    snap = core.read_json(core.SNAPSHOT_PATH) or {}
+    cnt = snap.get("counts") or {}
+    nc, nw = int(cnt.get("crit", 0)), int(cnt.get("warn", 0))
+    if "--json" in flags:
+        import json
+        print(json.dumps({"crit": nc, "warn": nw, "ts": snap.get("ts")}))
+        return 0
+    tmux = "--tmux" in flags
+    def paint(text, color):
+        return "#[fg=%s]%s#[default]" % ({"red": "red", "amber": "yellow", "green": "green"}[color], text) if tmux \
+            else T.c(text, color)
+    parts = []
+    if nc:
+        parts.append(paint("%s%d" % (T.g("crit"), nc), "red"))
+    if nw:
+        parts.append(paint("%s%d" % (T.g("warn"), nw), "amber"))
+    if not parts and "--quiet" not in flags:
+        parts.append(paint(T.g("ok"), "green"))
+    print(" ".join(parts))
+    return 0
+
+
+def watch(host, secs: float, width, compact) -> int:
+    """Redraw the dashboard every `secs` on the alternate screen until Ctrl-C."""
+    import time
+    from . import collect, registry, render
+    out = sys.stdout
+    out.write("\033[?1049h\033[?25l")  # alternate screen, hide the cursor
+    try:
+        while True:
+            cache = registry.Cache()
+            frame = render.render(host, cache, width=width or render.term_width(), compact=compact)
+            out.write("\033[H\033[2J" + frame + "\n")
+            out.flush()
+            if host.cfg.get("collector.login_refresh", True) and _due_any(host, cache):
+                collect.spawn_background(host)
+            time.sleep(secs)
+    except KeyboardInterrupt:
+        return 0
+    finally:
+        out.write("\033[?25h\033[?1049l")
+        out.flush()
 
 
 def list_sources(host, cache, as_json=False) -> int:
