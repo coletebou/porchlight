@@ -1329,7 +1329,7 @@ class GuardRails(unittest.TestCase):
         for banned in ("core.http(", "urlopen(", "os.system(", "os.popen(", "Popen(", "core.run("):
             self.assertNotIn(banned, src)
         self.assertEqual(len(re.findall(r"ctx\.run\(", src)), 2)  # gh auth token, and _aws
-        self.assertIn('ctx.run([gh, "auth", "token"]', src)
+        self.assertIn('ctx.run([gh, "auth", "token", "--hostname", "github.com"]', src)
         aws = set(re.findall(r'_aws\(ctx, \["(\w+)", "([\w-]+)"', src))
         self.assertEqual(aws, {("sts", "get-caller-identity"), ("ec2", "describe-instances"), ("ce", "get-cost-and-usage")})
 

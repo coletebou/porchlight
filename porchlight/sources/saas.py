@@ -841,7 +841,7 @@ def _gh_cli_token(ctx):
     gh = core.which("gh", tuple(ctx.cfg.get("paths") or ()))
     if not gh:
         return None
-    rc, out, _ = ctx.run([gh, "auth", "token"], timeout=5)
+    rc, out, _ = ctx.run([gh, "auth", "token", "--hostname", "github.com"], timeout=5)  # never a GH_HOST enterprise token
     tok = out.strip()
     return tok if rc == 0 and tok and not any(c.isspace() for c in tok) else None
 

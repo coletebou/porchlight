@@ -264,6 +264,8 @@ def units(host) -> list:
     for label, infos in groups.items():
         present = [i for i in infos if i.get("LoadState") not in (None, "", "not-found")]
         if not present:
+            if host.units:  # you asked for it by name: gone is news, not noise
+                out.append((label, "crit", "not found", []))
             continue
         up = sum(1 for i in present if i.get("ActiveState") == "active")
         failed = any(i.get("ActiveState") == "failed" for i in present)
@@ -361,8 +363,15 @@ def tmux() -> dict:
 
 def ports(items) -> list:
     """[(port, label, open)] for TCP ports; a refused connect returns at once."""
+    import ipaddress
     out = []
     for port, label, addr in items:
+        try:
+            if addr != "localhost":
+                ipaddress.ip_address(addr)  # a name would mean DNS at login; use [sources.reach] for remote checks
+        except ValueError:
+            out.append((port, label, False))
+            continue
         try:
             socket.create_connection((addr, port), timeout=0.2).close()
             out.append((port, label, True))

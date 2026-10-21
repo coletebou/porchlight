@@ -69,7 +69,8 @@ def run_one(src, host, env) -> dict:
                            fails=int(prev.get("fails", 0)) + 1)
         except Exception as e:  # noqa: BLE001 — a source must never take the run down
             rec.update(ok=False, error=secrets.redact("%s: %s" % (type(e).__name__, e), env),
-                       data=prev.get("data"), last_ok=prev.get("last_ok"), fails=int(prev.get("fails", 0)) + 1)
+                       data=prev.get("data"), last_ok=prev.get("last_ok"), fails=int(prev.get("fails", 0)) + 1,
+                       kept=bool(prev.get("ok") or prev.get("kept")))  # so a soft failure next still keeps it
     rec["ts"] = core.now()
     rec["ms"] = int((time.monotonic() - t0) * 1000)
     core.write_json_atomic(src_path(src.name), rec)
@@ -185,7 +186,9 @@ def spawn_background(host) -> bool:
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         code = "import sys; sys.path.insert(0, %r); from porchlight.cli import main; sys.exit(main(['collect', '--quiet']))" % root
         logf = open(core.LOG_PATH, "a")  # noqa: SIM115 — handed to the detached child
-        env = dict(os.environ, PORCHLIGHT_HOST=host.name)
+        env = dict(os.environ, PORCHLIGHT_HOST=host.name, PORCHLIGHT_CACHE_DIR=core.CACHE_DIR)
+        if host.cfg.path and host.cfg.path != "<string>":
+            env["PORCHLIGHT_CONFIG"] = host.cfg.path  # --config must reach the child, or it collects another config
         subprocess.Popen([sys.executable, "-I", "-c", code], stdin=subprocess.DEVNULL, stdout=logf, stderr=logf,
                          start_new_session=True, close_fds=True, env=env)
         return True

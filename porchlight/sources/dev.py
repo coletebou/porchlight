@@ -349,10 +349,8 @@ def aws_env(extra=None, region: str = "") -> dict:
     Bedrock key) are dropped: each authenticates one unrelated API, so it has no
     business riding along on an STS or EC2 call, nor sitting in a process that has
     no use for it."""
-    env = dict(os.environ)
-    env.update({k: str(v) for k, v in (extra or {}).items() if k.startswith("AWS_")})
-    for k in [k for k in env if k.startswith("AWS_BEARER_TOKEN")]:
-        env.pop(k)
+    from .. import secrets
+    env = secrets.child_env(extra or {}, keep=("AWS_",))  # unrelated secrets in this process stay out too
     env.update(AWS_PAGER="", AWS_CLI_AUTO_PROMPT="off")
     if region:
         env.update(AWS_REGION=region, AWS_DEFAULT_REGION=region)
@@ -843,6 +841,10 @@ def get_direct(http, url: str, verify: bool, timeout: float = 6.0) -> tuple:
 def get_socks(url: str, verify: bool, proxy, timeout: float = 6.0) -> tuple:
     """The same GET through a SOCKS5 proxy (`ssh -D`); the name resolves at the far
     end, so a VPC-only hostname works too."""
+    import urllib.parse
+    parts = urllib.parse.urlsplit(url)
+    if parts.username or parts.password:
+        return 0, 0, "credentials in URL"  # they would sit in curl's argv, readable by every local user
     curl = core.which("curl")
     if not curl:
         return 0, 0, "no curl"

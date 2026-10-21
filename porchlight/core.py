@@ -272,7 +272,7 @@ def http(url, method="GET", headers=None, data=None, json_body=None, timeout=6.0
     if basic:
         hdrs["Authorization"] = "Basic " + base64.b64encode(("%s:%s" % basic).encode()).decode()
     credentialed = any(k.lower() in ("authorization", "cookie", "x-api-key", "x-auth-key") for k in hdrs)
-    follow = (not credentialed) if redirects is None else redirects
+    follow = redirects is not False and not credentialed  # an explicit True never overrides the credential rule
     handlers = []
     if not verify:
         ctx = ssl.create_default_context()

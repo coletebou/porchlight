@@ -47,9 +47,19 @@ STRIPE = "https://api.stripe.com/v1"
 _MONTHLY = {"day": 30.0, "week": 52.0 / 12.0, "month": 1.0, "year": 1.0 / 12.0}
 
 
+# Stripe amounts are in each currency's minor unit: most have 100, some none, a few 1000.
+_ZERO_DECIMAL = {"bif", "clp", "djf", "gnf", "jpy", "kmf", "krw", "mga", "pyg", "rwf", "ugx", "vnd", "vuv", "xaf", "xof", "xpf"}
+_THREE_DECIMAL = {"bhd", "jod", "kwd", "omr", "tnd"}
+
+
+def _unit(cur) -> float:
+    cur = str(cur or "").lower()
+    return 1.0 if cur in _ZERO_DECIMAL else 1000.0 if cur in _THREE_DECIMAL else 100.0
+
+
 def _cents(minor, cur) -> str:
     cur = str(cur or "").lower()
-    return "$%.2f" % (minor / 100.0) if cur == "usd" else "%.2f %s" % (minor / 100.0, cur.upper())
+    return "$%.2f" % (minor / 100.0) if cur == "usd" else "%.2f %s" % (minor / _unit(cur), cur.upper())
 
 
 @_saas("stripe", "stripe", ttl=1800, timeout=15, needs=("STRIPE_SECRET_KEY",),
@@ -87,8 +97,8 @@ def _stripe(ctx):
     if bal is not None:
         avail = {str(x.get("currency")): _int(x.get("amount")) for x in _dicts(bal.get("available"))}
         pend = {str(x.get("currency")): _int(x.get("amount")) for x in _dicts(bal.get("pending"))}
-        d["available"] = {c: round(v / 100.0, 2) for c, v in avail.items()}
-        d["pending"] = {c: round(v / 100.0, 2) for c, v in pend.items()}
+        d["available"] = {c: round(v / _unit(c), 2) for c, v in avail.items()}
+        d["pending"] = {c: round(v / _unit(c), 2) for c, v in pend.items()}
         cur = "usd" if "usd" in avail else (next(iter(avail)) if avail else "usd")
         parts.append("%s avail" % _cents(avail.get(cur, 0), cur))
     sub = res.get("subs", (None, None))[0]
@@ -107,7 +117,7 @@ def _stripe(ctx):
                     continue  # metered and tiered prices have no flat monthly figure
                 n = max(_int(rec.get("interval_count")) or 1, 1)
                 c = str(pr.get("currency"))
-                mrr[c] = mrr.get(c, 0.0) + _f(pr["unit_amount"]) * (_int(it.get("quantity")) or 1) * per / n / 100.0
+                mrr[c] = mrr.get(c, 0.0) + _f(pr["unit_amount"]) * (_int(it.get("quantity")) or 1) * per / n / _unit(c)
         bad = by.get("past_due", 0) + by.get("unpaid", 0)
         d["subscriptions"] = {"by_status": by, "list_truncated": bool(sub.get("has_more")),
                               "mrr_est": {c: round(v, 2) for c, v in mrr.items()}}
@@ -447,7 +457,9 @@ def _aws(ctx, args, profile, region=None):
         argv += ["--profile", profile]
     if region:
         argv += ["--region", region]
-    env = dict(ctx.env, AWS_EC2_METADATA_DISABLED="true", AWS_PAGER="")  # no 2 s IMDS probe when credentials are absent
+    from .. import secrets
+    env = secrets.child_env(ctx.env, keep=("AWS_",))
+    env.update(AWS_EC2_METADATA_DISABLED="true", AWS_PAGER="", AWS_CLI_AUTO_PROMPT="off")  # no IMDS probe, no prompt
     rc, out, err = ctx.run(argv, timeout=CLI_TIMEOUT, env=env)
     if rc in (124, 126, 127):
         raise ProbeError({124: "timeout", 126: "cannot run aws", 127: "aws CLI not found"}[rc])

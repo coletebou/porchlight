@@ -78,7 +78,8 @@ def _make(e):
         rc, out, err = core.run(argv, float(e.get("timeout", 20)), env=env, cwd=core.expand(e["cwd"]) if e.get("cwd") else None)
         if rc in (124, 126, 127):
             raise RuntimeError(err.strip()[:160] or "rc %d" % rc)
-        d = parse(out, rc, str(e.get("format", "auto")))
+        from .. import secrets
+        d = parse(secrets.mask(out, ctx.env), rc, str(e.get("format", "auto")))  # a check may echo a credential
         if not d.get("alerts") and d["status"] in ("warn", "crit") and e.get("alert", True):
             d["alerts"] = [{"sev": d["status"], "msg": "%s: %s" % (e["name"], d.get("summary") or "status %s" % d["status"])}]
         if rc not in (0, 1, 2, 3) and not out.strip():

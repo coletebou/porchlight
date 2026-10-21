@@ -420,6 +420,7 @@ def certs(ctx):
     res = core.parallel({t["name"]: (lambda t=t: cert_days(t["name"], t.get("connect") or t["name"], int(t.get("port", 443))))
                          for t in targets}, timeout=12)
     rows, alerts = [], []
+    hist, fails = (ctx.prev or {}).get("fails") or {}, {}
     for t in targets:
         n = t["name"]
         days = res.get(n)
@@ -434,12 +435,17 @@ def certs(ctx):
                 err = core.net_reason(e)
             if days is None:
                 rows.append({"name": n, "days": None, "ok": False, "error": err})
-                alerts.append({"sev": "crit", "msg": "TLS cert %s unverifiable (%s)" % (n, err)})
+                if err.startswith(("invalid", "tls error")):
+                    alerts.append({"sev": "crit", "msg": "TLS cert %s unverifiable (%s)" % (n, err)})
+                else:  # offline or off the VPN looks just like this: alert only when it persists
+                    fails[n] = int(hist.get(n, 0)) + 1
+                    if fails[n] >= 2:
+                        alerts.append({"sev": "warn", "msg": "TLS cert %s unreachable (%s)" % (n, err)})
                 continue
         rows.append({"name": n, "days": round(days, 1), "ok": days > warn})
         if days < warn:
             alerts.append({"sev": "crit" if days < crit else "warn", "msg": "TLS cert %s expires in %dd" % (n, days)})
-    data = {"rows": rows}
+    data = {"rows": rows, "fails": fails}
     if alerts:
         data["alerts"] = alerts
     return data
@@ -479,6 +485,8 @@ def backups(ctx):
     import glob
     now = core.now()
     rows, alerts = [], []
+    prev_last = {r.get("name"): r.get("last") or 0 for r in (ctx.prev or {}).get("rows") or []}
+    cadence = dict((ctx.prev or {}).get("cadence") or {})
     units = [{"unit": u} if isinstance(u, str) else u for u in ctx.cfg.get("units") or []]
     units = [u for u in units if isinstance(u, dict) and u.get("unit")]
     runs = unit_runs([u["unit"] for u in units]) if units and core.which("systemctl") else {}
@@ -491,7 +499,13 @@ def backups(ctx):
             alerts.append({"sev": "warn", "msg": "backup %s: unit %s not found" % (name, unit)})
             continue
         last, nxt = r.get("last") or r.get("ended") or 0, r.get("next") or 0
-        interval = float(u.get("every_hours", 0)) * 3600 or ((nxt - last) if (nxt and last and nxt > last) else 86400)
+        # next - last stretches by every missed run (a box that was off for days), so the
+        # smallest gap seen between two real runs is the cadence once there is one.
+        if last and prev_last.get(name) and last > prev_last[name] + 60:
+            gap = last - prev_last[name]
+            cadence[name] = min(cadence.get(name) or gap, gap)
+        derived = (nxt - last) if (nxt and last and nxt > last) else 86400
+        interval = float(u.get("every_hours", 0)) * 3600 or (min(derived, cadence[name]) if cadence.get(name) else derived)
         ok = r.get("result") in ("success", None, "")
         overdue = bool(last) and now - last > interval * 1.5 + 3600
         rows.append({"name": name, "ok": ok and not overdue, "last": last, "next": nxt, "result": r.get("result"),
@@ -517,7 +531,7 @@ def backups(ctx):
             alerts.append({"sev": "warn", "msg": "backup %s: nothing at %s" % (name, f["path"])})
         elif not ok:
             alerts.append({"sev": "warn", "msg": "backup %s is %s old (max %dh)" % (name, core.human_age(now - mt), max_h)})
-    data = {"rows": rows}
+    data = {"rows": rows, "cadence": cadence}
     if alerts:
         data["alerts"] = alerts
     return data

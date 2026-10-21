@@ -15,7 +15,6 @@ for _mod in ("fleet", "weather", "ai_limits", "saas", "saas_accounts", "dev", "c
         if "No module named" not in str(e):
             print("porchlight: source module %s unavailable: %s" % (_mod, e), file=sys.stderr)
 
-_DONE = set()
 
 
 def register_all(host) -> list:
@@ -23,9 +22,8 @@ def register_all(host) -> list:
     plugins for this host (once per process). Returns plugin errors."""
     from .. import registry
     from . import custom
-    key = id(host.cfg)
-    if key in _DONE:
+    if getattr(host.cfg, "_porchlight_registered", False):
         return []
-    _DONE.add(key)
+    host.cfg._porchlight_registered = True
     custom.register(host)
     return registry.load_plugins(host)

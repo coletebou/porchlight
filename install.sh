@@ -26,8 +26,11 @@ else
   echo "installed $home"
 fi
 mkdir -p "$bin"
-ln -sf "$home/bin/porchlight" "$bin/porchlight"
-echo "linked $bin/porchlight"
+pyabs="$(command -v "$py")"
+rm -f "$bin/porchlight"   # an older install left a symlink here
+printf '#!/bin/sh\nexec "%s" "%s/bin/porchlight" "$@"\n' "$pyabs" "$home" > "$bin/porchlight"
+chmod +x "$bin/porchlight"
+echo "installed $bin/porchlight (runs $pyabs)"
 case ":$PATH:" in *":$bin:"*) ;; *) echo "note: add $bin to your PATH" ;; esac
 
 "$home/bin/porchlight" version
