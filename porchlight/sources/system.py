@@ -93,27 +93,39 @@ def short_name(args: str) -> str:
 
 
 def parse_tunnel(args: str):
-    """An `ssh`/`autossh` command line → {kind: L|R|D, ports, host}, or None."""
+    """An `ssh`/`autossh` command line → {kind: L|R|D, ports, host}, or None.
+    Understands clustered flags (-fNL 5173:…), attached values (-D1080) and bind
+    addresses (-D 127.0.0.1:1080, -L 127.0.0.1:9000:db:5432)."""
     toks = args.split()
     if not toks or os.path.basename(toks[0]) not in ("ssh", "autossh"):
         return None
+    takes_arg = set("BbcDEeFIiJLlMmOoPpQRSWw")
     kind, ports, host, i = None, [], None, 1
-    takes_arg = set("BbcDEeFIiJLlmOoPpQRSWw")
     while i < len(toks):
         t = toks[i]
-        if t.startswith("-") and len(t) > 1:
-            flag = t[1]
-            val = t[2:] or (toks[i + 1] if i + 1 < len(toks) and flag in takes_arg else "")
-            if flag in "LRD":
-                kind = kind or flag
-                spec = val.split(":")
-                port = spec[0] if (flag == "D" or len(spec) in (3, 4)) else ""
-                if len(spec) == 4:  # bind_address:port:host:hostport
-                    port = spec[1]
-                if port.isdigit():
-                    ports.append(port)
-            if flag in takes_arg and not t[2:]:
-                i += 1
+        if t.startswith("-") and len(t) > 1 and t != "--":
+            j = 1
+            while j < len(t):
+                flag = t[j]
+                if flag in takes_arg:
+                    val = t[j + 1:] or (toks[i + 1] if i + 1 < len(toks) else "")
+                    if not t[j + 1:]:
+                        i += 1  # the value was the next word
+                    if flag in "LRD":
+                        kind = kind or flag
+                        spec = val.split(":")
+                        if flag == "D":
+                            port = spec[-1]           # [bind_address:]port
+                        elif len(spec) == 4:
+                            port = spec[1]            # bind_address:port:host:hostport
+                        elif len(spec) == 3:
+                            port = spec[0]            # port:host:hostport
+                        else:
+                            port = ""
+                        if port.isdigit():
+                            ports.append(port)
+                    break
+                j += 1
         elif host is None:
             host = t.split("@")[-1]
         i += 1

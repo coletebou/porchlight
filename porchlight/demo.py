@@ -117,11 +117,23 @@ def _core_fixtures(now: float) -> dict:
         "restic": {"status": "ok", "summary": "last snapshot 5h ago · 412 GiB · 0 errors",
                    "rows": [{"label": "repository", "value": "b2:acme-backups", "status": "ok"},
                             {"label": "snapshots", "value": "1,284 (30 daily · 12 monthly)"}]},
-        "fleet": {"hosts": {"web-1": snap("web-1", 0.42, 4, 41, 63, badge="12/12 ctr"),
+        "fleet": {"hosts": {"web-1": snap("web-1", 0.42, 4, 41, 63, badge="12/12"),
                             "db-1": snap("db-1", 1.21, 8, 78, 88, warn=1),
                             "gpu-box": snap("gpu-box", 7.93, 8, 92, 71, crit=1, agents={"claude": 2, "codex": 1}),
                             "nas": {"ok": False, "seen": now - 7200, "error": "ssh timeout", "fails": 3}}},
     }
+
+
+def _relative(v, now):
+    """Demo files write times as "+N"/"-N" seconds from now, so the sample data
+    never ages: resolve them at load."""
+    if isinstance(v, dict):
+        return {k: _relative(x, now) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_relative(x, now) for x in v]
+    if isinstance(v, str) and len(v) > 1 and v[0] in "+-" and v[1:].isdigit():
+        return now + int(v)
+    return v
 
 
 def _patch_live(now: float):
@@ -165,7 +177,7 @@ def build(theme=None, keep=False):
         except (OSError, ValueError):
             continue
         if isinstance(extra, dict):
-            data.update({k: v for k, v in extra.items() if not k.startswith("_")})
+            data.update({k: _relative(v, now) for k, v in extra.items() if not k.startswith("_")})
     ages = {"fleet": 60, "procs": 45, "weather": 900, "quotes": 86400}
     for name, d in data.items():
         core.write_json_atomic(registry.src_path(name), {"v": 1, "name": name, "ts": now - ages.get(name, 120),

@@ -66,7 +66,7 @@ fleet.peers = ["web-1", "db-1", "gpu-box"]
 ```
  host         load  mem disk  agents    alerts   seen
 ● hub          0.84  52%  61%  3cl 2co   ok       now
-● web-1        0.42  41%  63%  12/12 ctr ok       now
+● web-1        0.42  41%  63%  12/12 ok       now
 ● db-1         1.21  78%  88%  -         1▲       now
 ● nas         offline
 ```

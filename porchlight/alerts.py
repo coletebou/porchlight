@@ -57,8 +57,11 @@ def gather(host, cache, lv) -> list:
     th = host.cfg.table("thresholds")
     out = []
 
-    def add(sev, msg, src="live"):
-        out.append({"sev": sev, "msg": msg, "src": src})
+    def add(sev, msg, src="live", fix=None):
+        a = {"sev": sev, "msg": msg, "src": src}
+        if fix:
+            a["fix"] = str(fix)[:200]
+        out.append(a)
 
     for d in v.get("disks", []):
         p = d["pct"]
@@ -103,7 +106,7 @@ def gather(host, cache, lv) -> list:
         if isinstance(d, dict):
             stale = cache.age(name) > max(6 * src.ttl, 3600)
             for a in d.get("alerts") or []:
-                add(a.get("sev", "warn"), a.get("msg", "") + (" (stale)" if stale else ""), name)
+                add(a.get("sev", "warn"), a.get("msg", "") + (" (stale)" if stale else ""), name, a.get("fix"))
 
     # Peers' critical alerts, on whichever host has the fleet table.
     max_age = float(host.cfg.get("alerts.peer_max_age", 1800))

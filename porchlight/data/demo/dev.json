@@ -1,0 +1,377 @@
+{
+ "_comment": "Sample developer records (fictional). Times written as \"+N\" / \"-N\" are seconds from the moment the demo loads, so the sample never goes stale; plain numbers (\"ago\", \"recent_s\") are durations.",
+ "docker": {
+  "engine": "up",
+  "binary": "docker",
+  "recent_s": 21600,
+  "projects": [
+   {
+    "name": "gadgets",
+    "running": 3,
+    "total": 5,
+    "done": 0,
+    "starting": 1,
+    "stopped": 0,
+    "unhealthy": [],
+    "restarting": [
+     "worker"
+    ],
+    "failed": [
+     {
+      "name": "api",
+      "code": 1,
+      "ago": 720
+     }
+    ]
+   },
+   {
+    "name": "widgets",
+    "running": 6,
+    "total": 7,
+    "done": 1,
+    "starting": 0,
+    "stopped": 0,
+    "unhealthy": [],
+    "restarting": [],
+    "failed": [
+     {
+      "name": "cron",
+      "code": 137,
+      "ago": 259200
+     }
+    ]
+   },
+   {
+    "name": "blog",
+    "running": 0,
+    "total": 2,
+    "done": 0,
+    "starting": 0,
+    "stopped": 2,
+    "unhealthy": [],
+    "restarting": [],
+    "failed": []
+   },
+   {
+    "name": "sandbox",
+    "running": 0,
+    "total": 3,
+    "done": 1,
+    "starting": 0,
+    "stopped": 2,
+    "unhealthy": [],
+    "restarting": [],
+    "failed": []
+   }
+  ],
+  "other": {
+   "running": 2,
+   "total": 3,
+   "unhealthy": [],
+   "restarting": []
+  },
+  "badge": "11/13",
+  "alerts": [
+   {
+    "sev": "warn",
+    "msg": "gadgets stack: api exited 1"
+   },
+   {
+    "sev": "crit",
+    "msg": "restart loop: gadgets-worker-1",
+    "fix": "docker logs --tail 50 gadgets-worker-1"
+   }
+  ]
+ },
+ "aws_auth": {
+  "cli": true,
+  "region": "us-west-2",
+  "profile": "dev",
+  "static": [],
+  "env": false,
+  "sso": {
+   "profiles": [
+    "dev",
+    "prod-readonly"
+   ],
+   "account": "123456789012",
+   "expires": "+21600",
+   "refreshable": true
+  },
+  "login": "aws sso login --profile dev",
+  "sts": {
+   "state": "ok",
+   "account": "123456789012",
+   "principal": "role/DeveloperAccess",
+   "at": "-600"
+  }
+ },
+ "instances": {
+  "src": "aws",
+  "asof": "-300",
+  "total": 5,
+  "running": 3,
+  "rows": [
+   {
+    "name": "bastion",
+    "type": "t3.small",
+    "ip": "10.0.0.10",
+    "id": "i-0abc1234def567890",
+    "launched": "-3542400",
+    "state": "running"
+   },
+   {
+    "name": "build-runner",
+    "type": "c7i.2xlarge",
+    "ip": "10.0.1.40",
+    "id": "i-0abc2345def678901",
+    "launched": "-21600",
+    "state": "running"
+   },
+   {
+    "name": "devbox",
+    "type": "m7i.xlarge",
+    "ip": "10.0.1.23",
+    "id": "i-0abc3456def789012",
+    "launched": "-273600",
+    "state": "running"
+   },
+   {
+    "name": "gpu-box",
+    "type": "g5.xlarge",
+    "ip": "10.0.2.15",
+    "id": "i-0abc4567def890123",
+    "launched": "-777600",
+    "state": "stopped",
+    "start": "aws ec2 start-instances --instance-ids i-0abc4567def890123 --region us-west-2 --profile dev"
+   },
+   {
+    "name": "scratch",
+    "type": "t3.medium",
+    "ip": "10.0.2.31",
+    "id": "i-0abc5678def901234",
+    "launched": "-1728000",
+    "state": "stopped",
+    "start": "aws ec2 start-instances --instance-ids i-0abc5678def901234 --region us-west-2 --profile dev"
+   }
+  ]
+ },
+ "prs": {
+  "forges": [
+   "gh",
+   "gl"
+  ],
+  "open": 6,
+  "review_open": 3,
+  "counts": {
+   "gh": {
+    "mine": 5,
+    "review": 2
+   },
+   "gl": {
+    "mine": 1,
+    "review": 1
+   }
+  },
+  "mine": [
+   {
+    "forge": "gh",
+    "ref": "acme/widgets#128",
+    "n": 128,
+    "title": "Add a retry budget to the HTTP fetcher",
+    "merge": "mergeable",
+    "approvals": 2,
+    "changes": 0,
+    "ci": "success",
+    "draft": false,
+    "updated": "-10800",
+    "url": "https://github.com/acme/widgets/pull/128"
+   },
+   {
+    "forge": "gl",
+    "ref": "acme/infra!34",
+    "n": 34,
+    "title": "Pin provider versions in the staging stack",
+    "merge": "mergeable",
+    "approvals": 0,
+    "changes": 0,
+    "ci": "pending",
+    "draft": false,
+    "updated": "-18000",
+    "url": "https://gitlab.example.com/acme/infra/-/merge_requests/34"
+   },
+   {
+    "forge": "gh",
+    "ref": "acme/widgets#131",
+    "n": 131,
+    "title": "Fix a race in the cache warmer",
+    "merge": "conflicts",
+    "approvals": 1,
+    "changes": 0,
+    "ci": "success",
+    "draft": false,
+    "updated": "-86400",
+    "url": "https://github.com/acme/widgets/pull/131"
+   },
+   {
+    "forge": "gh",
+    "ref": "acme/gadgets#77",
+    "n": 77,
+    "title": "Move the base image to the new LTS release",
+    "merge": "mergeable",
+    "approvals": 0,
+    "changes": 1,
+    "ci": "success",
+    "draft": false,
+    "updated": "-172800",
+    "url": "https://github.com/acme/gadgets/pull/77"
+   },
+   {
+    "forge": "gh",
+    "ref": "acme/docs#12",
+    "n": 12,
+    "title": "Document the plugin API",
+    "merge": "mergeable",
+    "approvals": 1,
+    "changes": 0,
+    "ci": "success",
+    "draft": false,
+    "updated": "-259200",
+    "url": "https://github.com/acme/docs/pull/12"
+   },
+   {
+    "forge": "gh",
+    "ref": "acme/widgets#140",
+    "n": 140,
+    "title": "Streaming CSV exports",
+    "merge": "mergeable",
+    "approvals": 0,
+    "changes": 0,
+    "ci": "failure",
+    "draft": true,
+    "updated": "-518400",
+    "url": "https://github.com/acme/widgets/pull/140"
+   }
+  ],
+  "review": [
+   {
+    "forge": "gh",
+    "ref": "acme/widgets#133",
+    "n": 133,
+    "title": "Cache negative DNS answers",
+    "merge": "mergeable",
+    "approvals": 0,
+    "changes": 0,
+    "ci": "success",
+    "draft": false,
+    "updated": "-7200",
+    "url": "https://github.com/acme/widgets/pull/133"
+   },
+   {
+    "forge": "gl",
+    "ref": "acme/platform/api!212",
+    "n": 212,
+    "title": "Rate-limit the export endpoint",
+    "merge": "mergeable",
+    "approvals": 0,
+    "changes": 0,
+    "ci": "pending",
+    "draft": false,
+    "updated": "-25200",
+    "url": "https://gitlab.example.com/acme/platform/api/-/merge_requests/212"
+   },
+   {
+    "forge": "gh",
+    "ref": "acme/gadgets#80",
+    "n": 80,
+    "title": "Drop the legacy config loader",
+    "merge": "unknown",
+    "approvals": 0,
+    "changes": 0,
+    "ci": null,
+    "draft": false,
+    "updated": "-86400",
+    "url": "https://github.com/acme/gadgets/pull/80"
+   }
+  ],
+  "alerts": [
+   {
+    "sev": "warn",
+    "msg": "1 of your PRs has merge conflicts (acme/widgets#131)"
+   },
+   {
+    "sev": "warn",
+    "msg": "changes requested on acme/gadgets#77"
+   }
+  ]
+ },
+ "reach": {
+  "socks": "1080",
+  "ssh": [
+   {
+    "alias": "bastion",
+    "host": "bastion.example.com",
+    "port": 22,
+    "ok": true,
+    "ms": 38
+   },
+   {
+    "alias": "devbox",
+    "via": "bastion",
+    "host": "bastion.example.com",
+    "port": 22,
+    "ok": true,
+    "ms": 41
+   },
+   {
+    "alias": "build-box",
+    "host": "10.0.3.12",
+    "port": 22,
+    "ok": false,
+    "error": "timeout"
+   }
+  ],
+  "endpoints": [
+   {
+    "label": "git",
+    "url": "https://git.example.com/",
+    "status": 200,
+    "ms": 182,
+    "ok": true,
+    "dns": true,
+    "via": "direct",
+    "error": null
+   },
+   {
+    "label": "sso",
+    "url": "https://sso.example.com/",
+    "status": 302,
+    "ms": 96,
+    "ok": true,
+    "dns": true,
+    "via": "direct",
+    "error": null
+   },
+   {
+    "label": "wiki",
+    "url": "https://wiki.internal.example.com/",
+    "status": 200,
+    "ms": 240,
+    "ok": true,
+    "dns": false,
+    "via": "socks",
+    "error": null
+   },
+   {
+    "label": "ci",
+    "url": "https://ci.example.com/health",
+    "status": 503,
+    "ms": 61,
+    "ok": false,
+    "dns": true,
+    "via": "direct",
+    "error": null
+   }
+  ]
+ }
+}

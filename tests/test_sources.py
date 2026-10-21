@@ -23,6 +23,10 @@ class Tunnels(unittest.TestCase):
         self.assertEqual(system.parse_tunnel("autossh -M 0 -R 8080:localhost:80 relay")["kind"], "R")
         self.assertEqual(system.parse_tunnel("ssh -L127.0.0.1:9000:db:5432 jump")["ports"], ["9000"])
         self.assertEqual(system.parse_tunnel("ssh -o ServerAliveInterval=5 -p 2222 -D1081 host")["ports"], ["1081"])
+        self.assertEqual(system.parse_tunnel("ssh -fND 1080 bastion"), {"kind": "D", "ports": ["1080"], "host": "bastion"})
+        self.assertEqual(system.parse_tunnel("ssh -fNL 5173:localhost:5173 devbox")["ports"], ["5173"])
+        self.assertEqual(system.parse_tunnel("ssh -D 127.0.0.1:1080 -N bastion")["ports"], ["1080"])
+        self.assertEqual(system.parse_tunnel("ssh -NfL8080:web:80 -J jump box")["host"], "box")
 
     def test_not_tunnels(self):
         self.assertIsNone(system.parse_tunnel("ssh devbox"))
