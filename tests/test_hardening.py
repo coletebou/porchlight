@@ -7,7 +7,7 @@ import urllib.request
 from unittest import mock
 
 import support  # noqa: F401 — must be first
-from support import ctx, host, put
+from support import ctx, host
 
 from porchlight import alerts, collect, core, live, registry, secrets
 from porchlight.sources import custom, saas_accounts, system
