@@ -1,0 +1,68 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: unit tests
+        run: python -m unittest discover -s tests -v
+      - name: demo renders at every width
+        run: |
+          for w in 40 72 100 140 200; do
+            python bin/porchlight demo --width "$w" --color truecolor > /dev/null
+          done
+          python bin/porchlight demo --width 120 --ascii --color none | LC_ALL=C grep -q '[^ -~]' && exit 1 || true
+      - name: cli smoke on an empty machine
+        env:
+          PORCHLIGHT_CACHE_DIR: ${{ runner.temp }}/cache
+          PORCHLIGHT_CONFIG: ${{ runner.temp }}/none.toml
+        run: |
+          python bin/porchlight collect --quiet
+          python bin/porchlight --width 120 --no-refresh
+          python bin/porchlight doctor
+          python bin/porchlight sources
+          python bin/porchlight init --print > "${{ runner.temp }}/generated.toml"
+          PORCHLIGHT_CONFIG="${{ runner.temp }}/generated.toml" python bin/porchlight doctor | tee "${{ runner.temp }}/doctor.txt"
+          ! grep -q "unknown setting" "${{ runner.temp }}/doctor.txt"
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: build and install the wheel
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+          python -m pip install dist/*.whl
+          cd /tmp && porchlight version && porchlight demo --width 120 > /dev/null && porchlight themes > /dev/null
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install ruff
+      - run: ruff check porchlight tests scripts

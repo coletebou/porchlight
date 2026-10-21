@@ -166,7 +166,7 @@ class Identities(unittest.TestCase):
     def test_host_filters(self):
         registry.source("t_hub", hosts=("#hub",))(lambda ctx: {})
         try:
-            self.assertEqual(self.st("", "t_hub"), "other hosts")
+            self.assertEqual(self.st("", "t_hub"), "not #hub")
             self.assertEqual(self.st('[fleet]\npeers = ["x"]', "t_hub"), "on")
         finally:
             registry.SOURCES.pop("t_hub")

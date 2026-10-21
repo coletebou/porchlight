@@ -35,7 +35,7 @@ def run(host, cache, plugin_errors=()) -> int:
     print(T.dim("config ") + (cfg.path if cfg.exists else T.c("%s (not found: defaults · porchlight init)" % cfg.path, "amber")) +
           (T.dim("  ·  matched hosts: ") + ", ".join(cfg.matched) if cfg.matched else ""))
     print(T.dim("cache  ") + core.CACHE_DIR + T.dim("  ·  color ") + T.MODE + (T.dim(" · ascii") if T.ASCII else ""))
-    for p in list(cfg.problems) + list(plugin_errors):
+    for p in list(cfg.problems) + list(plugin_errors) + registry.check_settings(cfg):
         print(T.c("%s %s" % (T.g("warn"), p), "amber"))
     print(timer_state())
     if not host.hub:

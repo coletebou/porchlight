@@ -70,6 +70,14 @@ def primary_ip() -> str:
         return ""
 
 
+def mac_version() -> str:
+    """ProductVersion straight from the plist: platform.mac_ver() imports plistlib
+    (~7 ms), more than the rest of the macOS vitals together."""
+    txt = core.read_text("/System/Library/CoreServices/SystemVersion.plist", 8192)
+    m = re.search(r"<key>ProductVersion</key>\s*<string>([^<]+)</string>", txt)
+    return m.group(1) if m else (platform.mac_ver()[0] or "?")
+
+
 def _os_linux() -> str:
     m = re.search(r'^PRETTY_NAME="?([^"\n]+)', core.read_text("/etc/os-release"), re.M)
     return m.group(1) if m else "Linux"
@@ -114,7 +122,7 @@ def vitals(host, disks: bool = True) -> dict:
         v["mem"] = {"used": used, "total": total}
         v["swap"] = {"used": swd.get("used", 0), "total": swd.get("total", 0)}
         v["uptime"] = core.now() - int(bt.group(1)) if bt else 0
-        v["os"] = "macOS " + (platform.mac_ver()[0] or "?")
+        v["os"] = "macOS " + mac_version()
     else:
         mi = _meminfo()
         total = mi.get("MemTotal", 0)

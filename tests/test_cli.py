@@ -93,6 +93,27 @@ class Wizard(unittest.TestCase):
         self.assertEqual(cfg.problems, [], text)
 
 
+class Examples(unittest.TestCase):
+    """Every shipped example config parses with no unknown setting or source."""
+
+    def test_examples_are_valid(self):
+        from porchlight import sources  # noqa: F401 — registers every source
+        root = os.path.join(support.ROOT, "examples")
+        names = sorted(n for n in os.listdir(root) if n.endswith(".toml"))
+        self.assertTrue(names)
+        for n in names:
+            with open(os.path.join(root, n)) as f:
+                cfg = config.loads(f.read(), host="web-1")
+            self.assertEqual(cfg.problems + registry.check_settings(cfg), [], n)
+
+    def test_typo_suggestions(self):
+        from porchlight import sources  # noqa: F401
+        cfg = config.loads("[sources.wether]\n[sources.weather]\nlatitud = 1\n")
+        probs = registry.check_settings(cfg)
+        self.assertIn("unknown source sources.wether (did you mean weather?)", probs)
+        self.assertIn("unknown setting sources.weather.latitud (did you mean latitude?)", probs)
+
+
 class Plugins(unittest.TestCase):
     def test_plugin_registers_source_and_panel(self):
         os.makedirs(core.PLUGIN_DIR, exist_ok=True)

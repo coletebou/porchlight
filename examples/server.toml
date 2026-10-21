@@ -1,0 +1,32 @@
+# A Linux server you SSH into: services, health routes, TLS, backups, Docker.
+[general]
+role = "server"
+clock_secondary = "America/New_York"   # your own time zone next to UTC
+
+[theme]
+accent = "ember"                       # production machines in warm red
+
+[services]
+systemd = ["nginx", "postgresql", "docker", "fail2ban", { unit = "actions.runner.*", label = "runners" }]
+
+[sources.health]
+targets = [
+  { label = "app", url = "http://127.0.0.1:8080/healthz", show = "version", format = "v{}" },
+  { label = "worker", url = "http://127.0.0.1:9090/ready" },
+]
+
+[sources.certs]
+targets = ["example.com", { name = "api.example.com", connect = "127.0.0.1" }]
+
+[sources.backups]
+units = ["restic-backup", { unit = "pg-dump", label = "db", every_hours = 24 }]
+files = [{ label = "nightly", path = "/var/backups/nightly-*.tar.zst", max_age_hours = 26 }]
+
+[sources.docker]
+expected = ["app", "worker-*", "postgres"]
+
+[sources.drift]
+targets = [{ label = "app", repo = "/srv/app/src", file = "/srv/app/REVISION", ref = "origin/main" }]
+
+[layout]
+panels = ["system", "services", "health", "docker", "backups", "agents"]

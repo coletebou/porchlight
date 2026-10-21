@@ -423,7 +423,10 @@ def render(host, cache, width=None, only=None, login=False, compact=None) -> str
     ctx = RCtx(host, cache, lv, al, cw)
     keys = only or host.panels
     if not only:
-        keys = keys + [k for k in panels.custom_keys(host) if k not in keys]
+        extra = panels.custom_keys(host)
+        if host.auto_panels:  # plugin panels too, after the built-ins, whenever they have data
+            extra += [k for k in panels.BUILDERS if k not in extra]
+        keys = keys + [k for k in extra if k not in keys]
     if compact:
         keys = [k for k in host.compact if k in panels.BUILDERS]
     built = build_panels(ctx, keys)

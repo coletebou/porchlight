@@ -1,0 +1,35 @@
+# A work laptop that must never touch personal API keys: an allowlist identity.
+repos = ["~/work/platform"]
+ports = [{ port = 5173, label = "client" }, { port = 3000, label = "api" }]
+
+[general]
+identity = "work"
+
+[identities.work]
+allow = ["procs", "tailscale", "repos", "weather", "quotes", "docker", "aws_auth", "instances", "prs", "reach",
+         "claude_usage", "codex_usage"]
+secrets_files = ["~/.config/porchlight/work.env"]
+
+[theme]
+accent = "teal"
+
+
+[sources.aws_auth]
+login_command = "aws sso login --profile work"
+
+[sources.instances]
+filters = ["Name=tag:Owner,Values=me"]
+
+[sources.prs]
+gitlab_url = "https://gitlab.example.com"
+
+[sources.reach]
+ssh = ["bastion", "devbox"]
+endpoints = [{ label = "gitlab", url = "https://gitlab.example.com/users/sign_in" },
+             { label = "wiki", url = "https://wiki.example.com/" }]
+
+[sources.claude_usage]
+quiet_errors = true      # no subscription login here is normal: do not nag
+
+[layout]
+panels = ["system", "agents", "docker", "prs", "access", "instances", "ai", "network", "repos"]

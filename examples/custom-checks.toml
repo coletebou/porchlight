@@ -1,0 +1,20 @@
+# Any command is a source: JSON, plain lines, or Nagios-plugin conventions.
+[[custom]]
+name = "disk-home"
+title = "DISK /home"
+command = ["/usr/lib/nagios/plugins/check_disk", "-w", "15%", "-c", "8%", "-p", "/home"]
+ttl = 600
+
+[[custom]]
+name = "restic"
+title = "RESTIC"
+command = "restic snapshots --latest 1 --json | python3 ~/.config/porchlight/restic-summary.py"
+needs = ["RESTIC_PASSWORD", "RESTIC_REPOSITORY"]
+ttl = 3600
+
+[[custom]]
+name = "todo"
+title = "TODAY"
+command = "grep -c '^- \\[ \\]' ~/notes/today.md || true"
+format = "lines"
+ttl = 300

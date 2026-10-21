@@ -1,0 +1,35 @@
+# One file for a whole fleet, shared through your dotfiles. Each machine picks
+# its section by hostname; the hub pushes account-wide data to the peers.
+[general]
+identity = "personal"
+secrets_files = ["~/.config/porchlight/secrets.env"]
+
+[fleet]
+order = ["studio", "web-1", "db-1", "nas"]
+
+[sources.sites]                  # probed once, by the hub
+targets = [{ label = "shop", url = "https://shop.example.com" }, { label = "docs", url = "https://docs.example.com" }]
+
+[sources.github]
+repos = ["acme/shop", "acme/infra"]
+branch = "main"
+
+[hosts."studio"]                 # the desktop: the hub
+fleet.peers = ["web-1", "db-1", "nas"]
+theme.accent = "porchlight"
+
+[hosts."web-*"]
+general.role = "server"
+theme.accent = "dusk"
+fleet.badge = "docker"           # "12/12" containers in the hub's fleet table
+sources.health.targets = [{ label = "shop", url = "http://127.0.0.1:3000/health" }]
+
+[hosts."db-*"]
+general.role = "server"
+theme.accent = "aurora"
+sources.backups.units = ["pg-backup"]
+
+[hosts."nas"]
+general.role = "server"
+system.mounts = ["/", "/volume1"]
+system.mount_labels = { "/volume1" = "pool" }

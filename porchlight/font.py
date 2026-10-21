@@ -9,7 +9,6 @@ Lowercase draws as uppercase; anything unknown draws as '?'.
 """
 from __future__ import annotations
 
-import hashlib
 import os
 
 from . import core
@@ -102,6 +101,7 @@ def width_of(text: str, font: str) -> int:
 
 def figlet(text: str, font: str, cache_dir: str) -> list:
     """figlet/toilet output, cached per (text, font): banners render on every login."""
+    import hashlib
     key = hashlib.sha1(("%s\0%s" % (text, font)).encode()).hexdigest()[:16]
     path = os.path.join(cache_dir, "banner-%s.txt" % key)
     cached = core.read_text(path)

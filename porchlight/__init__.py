@@ -10,7 +10,9 @@ the login render, which never needs them.
 
 __version__ = "0.1.0"
 
-_API = {"source", "panel", "Panel", "kv", "cells", "SEP", "theme", "core", "EVERYONE"}
+# Only names that are not submodules: `from . import core` inside the package
+# must reach the import system, not this hook.
+_API = {"source", "panel", "Panel", "kv", "cells", "SEP", "EVERYONE"}
 
 
 def __getattr__(name):

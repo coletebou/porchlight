@@ -2,12 +2,10 @@
 TLS certificates, backups, file budgets, deploy drift and MongoDB."""
 from __future__ import annotations
 
-import fnmatch
 import json
 import os
 import re
 import socket
-import ssl
 import time
 
 from .. import core
@@ -392,6 +390,7 @@ def health(ctx):
 # ── TLS certificates ────────────────────────────────────────────────────────
 def cert_days(name: str, addr: str, port: int, timeout: float = 5.0) -> float:
     """Days until the certificate served at addr:port for SNI `name` expires."""
+    import ssl  # ~4 ms of import the login render never needs
     sctx = ssl.create_default_context()
     with socket.create_connection((addr, port), timeout=timeout) as sock:
         with sctx.wrap_socket(sock, server_hostname=name) as ss:
@@ -412,6 +411,7 @@ def certs(ctx):
     res = core.parallel({t["name"]: (lambda t=t: cert_days(t["name"], t.get("connect") or t["name"], int(t.get("port", 443))))
                          for t in targets}, timeout=12)
     rows, alerts = [], []
+    import ssl
     for t in targets:
         n = t["name"]
         days = res.get(n)
@@ -465,8 +465,7 @@ def unit_runs(units) -> dict:
     return res
 
 
-@source("backups", ttl=600, timeout=10, defaults={"units": [], "files": []},
-        hosts=lambda h: bool(h.cfg.source("backups").get("units") or h.cfg.source("backups").get("files")))
+@source("backups", ttl=600, timeout=10, defaults={"units": [], "files": []}, requires=("units|files",))
 def backups(ctx):
     """Backup jobs: systemd service results and timer cadence, plus files that must stay fresh."""
     now = core.now()
@@ -618,7 +617,7 @@ _MONGO_JS = (
     "index:Number(s.indexSize),collections:Number(s.collections),objects:Number(s.objects)}))")  # BSON Longs → numbers
 
 
-@source("mongodb", ttl=900, timeout=30, optin=True, binaries=("mongosh",),
+@source("mongodb", ttl=900, timeout=30, optin=True, binaries=("mongosh",), share=True,
         defaults={"uri_env": "MONGODB_URI", "env_file": "", "database": "", "slow_ms": 3000})
 def mongodb(ctx):
     """MongoDB health over mongosh: ping, hello, dbStats (read-only).
@@ -646,6 +645,3 @@ def mongodb(ctx):
         d["alerts"] = [{"sev": "warn", "msg": "MongoDB slow: connect+ping %dms" % d["ms"]}]
     return d
 
-
-def match_any(name: str, patterns) -> bool:
-    return any(fnmatch.fnmatchcase(name, p) for p in patterns)

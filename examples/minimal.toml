@@ -1,0 +1,10 @@
+# The smallest useful config: a couple of repos, your weather, your sites.
+repos = ["~/code/my-project"]
+
+[sources.weather]
+latitude = 52.52
+longitude = 13.40
+units = "metric"
+
+[sources.sites]
+targets = [{ label = "blog", url = "https://example.com" }]

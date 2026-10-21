@@ -58,7 +58,7 @@ def source(name, ttl=600, timeout=10.0, scope="local", hosts=None, needs=(), ret
     needs      environment variables (from the shell or secrets files) that must all be set
     identities "*" or a tuple of identity names this source serves by default
     defaults   the source's settings, overridable under [sources.<name>]
-    requires   settings that must be non-empty before the source runs (e.g. "targets")
+    requires   settings that must be non-empty before the source runs ("targets"; "a|b" = either)
     optin      off unless [sources.<name>] exists or sets enabled = true
     share      ship this host-local record to the hub inside the snapshot (fleet panels)
     binaries   executables that must be on PATH (otherwise the source is "off")
@@ -89,11 +89,12 @@ def state(src, host) -> str:
         return "disabled"
     if src.optin and enabled is not True and not host.cfg.source_configured(src.name):
         return "opt-in"
-    if not host.matches(cfg.get("hosts", src.hosts)):
-        return "other hosts"
-    for key in src.requires:
-        if not cfg.get(key):
-            return "needs %s" % key
+    filt = cfg.get("hosts", src.hosts)
+    if not host.matches(filt):
+        return ("not " + "/".join(filt)) if isinstance(filt, (list, tuple)) else "other hosts"
+    for key in src.requires:  # "a|b": any one of them will do
+        if not any(cfg.get(k) for k in key.split("|")):
+            return "needs %s" % key.replace("|", " or ")
     for b in src.binaries:
         if not core.which(b, tuple(cfg.get("paths") or ())):
             return "no %s" % b
@@ -132,18 +133,22 @@ class Cache:
 
     def __init__(self):
         self._recs = {}
+        self._shared_map = None
         self.bundle = core.read_json(core.BUNDLE_PATH) or {}
 
     def _shared(self, name):
-        out = []
-        local_fleet = core.read_json(src_path("fleet")) or {}
-        tables = [((local_fleet.get("data") or {}).get("hosts") or {}), ((self.bundle.get("fleet") or {}).get("hosts") or {})]
-        for table in tables:
-            for rec in table.values():
-                shared = ((rec or {}).get("snap") or {}).get("shared") or {}
-                if isinstance(shared.get(name), dict):
-                    out.append(shared[name])
-        return out
+        """Records peers shared in their snapshots (from this hub's fleet table or the bundle)."""
+        if self._shared_map is None:
+            self._shared_map = {}
+            local_fleet = core.read_json(src_path("fleet")) or {}
+            for table in (((local_fleet.get("data") or {}).get("hosts") or {}),
+                          ((self.bundle.get("fleet") or {}).get("hosts") or {})):
+                for rec in table.values():
+                    shared = ((rec or {}).get("snap") or {}).get("shared") or {}
+                    for k, v in shared.items():
+                        if isinstance(v, dict):
+                            self._shared_map.setdefault(k, []).append(v)
+        return self._shared_map.get(name, [])
 
     def rec(self, name):
         if name not in self._recs:
@@ -176,6 +181,37 @@ class Cache:
         if hub:
             return (self.data("fleet") or {}).get("hosts") or {}
         return (self.bundle.get("fleet") or {}).get("hosts") or {}
+
+
+COMMON_SETTINGS = {"enabled", "identities", "hosts", "paths"}
+
+
+def check_settings(cfg) -> list:
+    """Typos under [sources.*] (also inside [hosts.*]): unknown sources, and
+    settings a source does not declare in its defaults."""
+    import difflib
+    problems = []
+    tables = [("", cfg.raw.get("sources") or {})]
+    tables += [("hosts.%s." % p, (h or {}).get("sources") or {}) for p, h in (cfg.raw.get("hosts") or {}).items()
+               if isinstance(h, dict)]
+    for where, srcs in tables:
+        if not isinstance(srcs, dict):
+            continue
+        for name, table in srcs.items():
+            src = SOURCES.get(name)
+            if src is None:
+                near = difflib.get_close_matches(name, list(SOURCES), 1)
+                problems.append("unknown source %ssources.%s%s" % (where, name, " (did you mean %s?)" % near[0] if near else ""))
+                continue
+            if not isinstance(table, dict) or getattr(src, "custom", False):
+                continue
+            known = COMMON_SETTINGS | set(src.defaults)
+            for key in table:
+                if key not in known:
+                    near = difflib.get_close_matches(key, sorted(known), 1)
+                    problems.append("unknown setting %ssources.%s.%s%s" % (
+                        where, name, key, " (did you mean %s?)" % near[0] if near else ""))
+    return problems
 
 
 def load_plugins(host) -> list:
