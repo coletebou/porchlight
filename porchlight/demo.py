@@ -53,6 +53,12 @@ units = ["restic-home"]
 [sources.drift]
 targets = [{ repo = "~/code/webapp", file = "/srv/webapp/REVISION" }]
 
+[sources.gcp_auth]
+project = "example-dev"
+
+[sources.azure_auth]
+subscription = "Example development"
+
 [[custom]]
 name = "restic"
 title = "RESTIC"

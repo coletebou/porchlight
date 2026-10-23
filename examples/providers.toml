@@ -1,0 +1,19 @@
+# Additional providers are opt-in. Keep tokens in the secrets file.
+[general]
+secrets_files = ["~/.config/porchlight/secrets.env"]
+
+[sources.gcp_auth]
+project = "example-dev"
+
+[sources.azure_auth]
+subscription = "Example development"
+
+[sources.prs]
+gitea = true
+gitea_url = "https://git.example.com"
+gitea_repos = ["team/widgets"]             # GITEA_TOKEN
+forgejo = true
+forgejo_url = "https://code.example.com"
+forgejo_repos = ["team/tools"]             # FORGEJO_TOKEN
+bitbucket = true
+bitbucket_repos = ["workspace/service"]   # BITBUCKET_EMAIL + BITBUCKET_API_TOKEN, or BITBUCKET_TOKEN

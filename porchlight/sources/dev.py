@@ -1,5 +1,5 @@
 """Developer and work-machine sources: container stacks, AWS credentials, EC2
-instances, pull/merge requests on GitHub and GitLab, and reachability.
+instances, pull/merge requests on configured Git forges, and reachability.
 
   docker     containers grouped by compose project (up/total, unhealthy, restart
              loops, fresh crashes), plus the containers you say must be running
@@ -18,7 +18,7 @@ exist but are rejected, your PRs with conflicts, changes requested or failing
 CI, an endpoint answering 5xx twice in a row.
 
 Every call is read-only: `docker ps`, `aws sts get-caller-identity`, `aws ec2
-describe-instances`, one GitHub GraphQL search, GitLab GETs, `ssh -G`, TCP
+describe-instances`, one GitHub GraphQL search, forge GETs, `ssh -G`, TCP
 connects and GETs. Modules this file imports at the top are already loaded by
 the core (sources register on every login render); heavier ones load on use.
 """
@@ -33,6 +33,7 @@ import time
 
 from .. import core, registry, secrets
 from ..registry import source
+from .forges import ForgeError
 
 
 def _some(names, n: int = 5) -> str:
@@ -526,11 +527,7 @@ _GH_CI = {"SUCCESS": "success", "FAILURE": "failure", "ERROR": "failure", "PENDI
 _GL_CI = {"success": "success", "failed": "failure", "running": "pending", "pending": "pending", "created": "pending",
           "preparing": "pending", "waiting_for_resource": "pending", "scheduled": "pending"}
 _GL_UNCHECKED = ("unchecked", "checking", "preparing", "approvals_syncing", "cannot_be_merged_recheck")
-FORGES = {"gh": "github", "gl": "gitlab"}
-
-
-class ForgeError(Exception):
-    """A forge answered, but not with a list (unauthorized, rate-limited, a bad query)."""
+FORGES = {"gh": "github", "gl": "gitlab", "gt": "gitea", "fj": "forgejo", "bb": "bitbucket"}
 
 
 def github_token(env, host: str = "github.com"):
@@ -698,10 +695,13 @@ def gitlab_base(cfg, env) -> str:
 
 @source("prs", ttl=900, timeout=40, scope="global", defaults={
     "github": True, "github_url": "https://api.github.com", "gitlab": "auto", "gitlab_url": "",
+    "gitea": False, "gitea_url": "", "gitea_repos": [],
+    "forgejo": False, "forgejo_url": "", "forgejo_repos": [], "bitbucket": False, "bitbucket_repos": [],
     "repos": [], "limit": 20, "detail": 10})
 def prs(ctx):
-    """Your open pull/merge requests on GitHub and GitLab, and the ones waiting on your review."""
+    """Your open pull/merge requests across configured forges, and the ones waiting on your review."""
     import urllib.parse
+    from . import forges
     cfg, env = ctx.cfg, ctx.env
     n = max(1, min(50, int(cfg.get("limit", 20))))
     jobs, errors = {}, {}
@@ -717,24 +717,49 @@ def prs(ctx):
             jobs["gl"] = lambda: gitlab_prs(ctx.http, gl_tok, gitlab_base(cfg, env), n, int(cfg.get("detail", 10)))
         else:
             errors["gl"] = "no GITLAB_TOKEN"
+    targets = {}
+    for forge, provider in (("gt", "gitea"), ("fj", "forgejo"), ("bb", "bitbucket")):
+        if cfg.get(provider) is not True:
+            continue
+        try:
+            base = forges.BITBUCKET_API if forge == "bb" else cfg.get(provider + "_url")
+            scope = forges.target(base, cfg.get(provider + "_repos"))
+            targets[forge] = scope
+            if forge == "bb":
+                jobs[forge] = lambda scope=scope: forges.bitbucket_prs(ctx.http, env, scope["repos"], n)
+            else:
+                provider_token = env.get(provider.upper() + "_TOKEN")
+                jobs[forge] = lambda scope=scope, provider_token=provider_token, forge=forge: forges.gitea_prs(
+                    ctx.http, provider_token, scope["url"], scope["repos"], n, int(cfg.get("detail", 10)), forge)
+        except ForgeError as e:
+            jobs[forge] = lambda msg=str(e): {"error": msg}
     res = core.parallel({k: _guard(fn) for k, fn in jobs.items()}, timeout=30)
     prev = ctx.prev or {}
-    mine, review, counts, ok = [], [], {}, []
+    mine, review, counts, ok, truncated = [], [], {}, [], []
     for forge in sorted(jobs):
         r = res.get(forge) or {"error": "timeout"}
         if r.get("error"):
             errors[forge] = secrets.redact(str(r["error"]), env, 120)
             # Off VPN a self-hosted GitLab is out of reach while GitHub is not: keep
             # that forge's last rows (its entry in `errors` says they are old).
+            if forge in ("gt", "fj", "bb") and (
+                    forge not in targets or targets[forge] != (prev.get("targets") or {}).get(forge)):
+                continue  # a changed URL/repository list must not retain another target's rows
             mine += [m for m in prev.get("mine") or [] if m.get("forge") == forge]
             review += [m for m in prev.get("review") or [] if m.get("forge") == forge]
             if forge in (prev.get("counts") or {}):
                 counts[forge] = prev["counts"][forge]
+            if forge in (prev.get("truncated") or []):
+                truncated.append(forge)
             continue
         ok.append(forge)
         mine, review = mine + r["mine"], review + r["review"]
         counts[forge] = {"mine": r["mine_total"], "review": r["review_total"]}
-    if errors and not ok:  # off the network or unauthorized everywhere: keep the last list
+        if r.get("truncated"):
+            truncated.append(forge)
+    if errors and not ok and (not prev or targets == (prev.get("targets") or {})):
+        # The collector preserves the whole old record on a soft failure. Allow
+        # that only when its opt-in providers still refer to the same targets.
         return {"error": "; ".join("%s: %s" % kv for kv in sorted(errors.items())), "status": "unknown"}
     pats = [str(p) for p in cfg.get("repos") or [] if str(p).strip()]
     if pats:
@@ -745,6 +770,10 @@ def prs(ctx):
     data = {"mine": mine[:n], "review": review[:n], "forges": sorted(jobs), "counts": counts,
             "open": len(mine) if pats else sum(c.get("mine", 0) for c in counts.values()),
             "review_open": len(review) if pats else sum(c.get("review", 0) for c in counts.values())}
+    if targets:
+        data["targets"] = targets
+    if truncated:
+        data["truncated"] = sorted(truncated)
     if errors:
         data["errors"] = errors
     al = pr_alerts(data["mine"])

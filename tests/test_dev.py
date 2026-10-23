@@ -1264,7 +1264,7 @@ class PanelTest(unittest.TestCase):
 class DemoDataTest(unittest.TestCase):
     def test_shapes_match_the_sources(self):
         d = demo_data()
-        self.assertEqual(sorted(d), ["aws_auth", "docker", "instances", "prs", "reach"])
+        self.assertEqual(sorted(d), ["aws_auth", "azure_auth", "docker", "gcp_auth", "instances", "prs", "reach"])
         self.assertTrue(all(name in registry.SOURCES for name in d))
         for m in d["prs"]["mine"] + d["prs"]["review"]:
             self.assertEqual(set(m), {"forge", "ref", "n", "title", "merge", "approvals", "changes", "ci", "draft",

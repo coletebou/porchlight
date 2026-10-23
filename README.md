@@ -38,7 +38,7 @@ did not run, and two of your pull requests have conflicts. That's porchlight.
   `NO_COLOR`, an ASCII mode that turns on by itself when the locale cannot
   show glyphs, 1-3 column masonry from phone to ultrawide, nine themes.
 - **Zero dependencies.** Python 3.9+ standard library, macOS and Linux (WSL too).
-- **Safe by design.** Read-only probes. Never refreshes or writes a credential. Secrets
+- **Safe by design.** Read-only probes. AI login tokens are never refreshed or written. Secrets
   never reach the cache, a log, argv or an error message.
 
 ## Quick start
@@ -69,10 +69,10 @@ git clone https://github.com/coletebou/porchlight ~/.local/share/porchlight
 | **AGENTS** | Claude Code, Codex, Aider, Gemini, OpenCode, Goose, Cursor Agent, Amp, Copilot… running counts, orphaned agent and MCP processes, zombies, tmux, top memory |
 | **AI LIMITS** | Claude, Codex, Cursor and Grok plan windows (5 h / 7 d / per model) with reset times and credits, read-only |
 | **DOCKER** | compose stacks up/total, unhealthy, restarting, recent crashes (not clean exits or deliberate stops), expected containers missing |
-| **PULL REQUESTS** | yours and those awaiting your review on GitHub and GitLab: conflicts, approvals, changes requested, CI |
+| **PULL REQUESTS** | yours and those awaiting your review on GitHub, GitLab, Gitea, Forgejo and Bitbucket Cloud: conflicts, approvals, changes requested, CI where available |
 | **FLEET** | every machine's load, memory, disk, agents and alerts, offline detection that ignores Tailscale's flapping bit |
 | **NETWORK** | Tailscale peers and key expiry, live ssh tunnels (`-L`/`-R`/`-D`), your dev ports (⇄ when served through a tunnel) |
-| **ACCESS** | the AWS identity STS confirms, the SSO token clock, VPN/VPC reachability, internal endpoints (direct or via SOCKS) |
+| **ACCESS** | AWS identity and SSO token clock, opt-in GCP and Azure account checks, VPN/VPC reachability, internal endpoints (direct or via SOCKS) |
 | **INSTANCES** | your EC2 instances, with start hints for stopped ones |
 | **HEALTH** | your own health routes (two-strike flap guard), MongoDB, deploy drift (deployed SHA vs `origin/main`) |
 | **EDGE** | public sites with latency, UptimeRobot, Cloudflare tunnels, traffic and 5xx rate, Vercel deploys |
@@ -151,7 +151,7 @@ flags unknown settings, with "did you mean…?" suggestions.
 | **This machine** | process census and AI agents · Tailscale · repos · health routes · TLS certificates · backups · file budgets · deploy drift · MongoDB · weather (Open-Meteo, NWS, wttr.in) · quotes |
 | **AI plans** | Claude (Pro/Max) · Codex (ChatGPT plans) · Cursor · Grok |
 | **Cloud and SaaS** | Cloudflare · Vercel · UptimeRobot · Hetzner · GitHub CI · Sentry · Stripe · Resend · Langfuse · Anthropic, OpenAI, OpenRouter and xAI spend · AWS account · Twilio |
-| **Developer machines** | Docker/Podman compose stacks · AWS credentials and SSO · EC2 instances · GitHub and GitLab pull requests · VPN and endpoint reachability |
+| **Developer machines** | Docker/Podman compose stacks · AWS, GCP and Azure credentials · EC2 instances · GitHub, GitLab, Gitea, Forgejo and Bitbucket Cloud pull requests · VPN and endpoint reachability |
 | **Yours** | `[[custom]]` commands (JSON, lines, Nagios plugins) · Python plugins |
 
 Reference: [host sources](docs/reference/core.md) · [AI plans](docs/reference/ai.md) ·
@@ -267,6 +267,9 @@ client). Native Windows shells, no.
 each user's cache and credentials are their own. Install it per user.
 
 ## Development
+
+Coming from fleet-motd? See the [migration guide](docs/migrating-from-fleet-motd.md)
+for configuration and provider mappings.
 
 ```sh
 python3 -m unittest discover -s tests   # no network, ~1 s
