@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Opt-in GCP and Azure account checks in ACCESS, using the existing CLI logins
+  and read-only API calls to distinguish verified access from cached accounts.
+- Gitea, Forgejo and Bitbucket Cloud providers in PULL REQUESTS, with explicit
+  repository targets, bounded pagination and per-provider stale-data handling.
+- A migration guide for fleet-motd configurations.
+
 ## [0.1.0] - 2026-10-21
 
 First public release.

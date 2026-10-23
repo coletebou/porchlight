@@ -9,8 +9,9 @@ Thanks for helping! porchlight aims to stay small, fast and dependency-free.
 - **The login path never touches the network.** Anything that can take more
   than a few milliseconds belongs in a source (the collector), not in a panel
   or a live probe.
-- **Read-only.** Sources observe; they never change remote state, refresh a
-  token or write a credential.
+- **Read-only.** Sources observe; they never change remote state or directly
+  refresh a token or write a credential. Official cloud CLIs may maintain their
+  own login caches while performing read-only queries; document this behavior.
 - **No secrets in output.** Credentials go in headers or a child's
   environment, never URLs, argv, records, logs or errors. Add a test that
   proves it for anything new that handles a credential.

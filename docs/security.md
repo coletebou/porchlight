@@ -39,6 +39,11 @@ documented read-only POST queries (GraphQL reads for Cloudflare and GitHub,
 UptimeRobot's legacy `getMonitors`); the SaaS test suite audits the source for
 any other verb. Nothing creates, updates or deletes remote state.
 
+Cloud account checks use the official AWS, Google Cloud and Azure CLIs. These
+CLIs may maintain or refresh their own login caches while making read-only API
+requests. Porchlight does not issue login, token-export or explicit refresh
+commands. GCP and Azure checks are opt-in.
+
 ## AI subscription logins
 
 The AI plan-limit sources read the OAuth tokens that Claude Code, Codex,

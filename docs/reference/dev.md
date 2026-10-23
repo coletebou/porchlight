@@ -1,14 +1,16 @@
 # Developer sources
 
-Five sources for a development or work machine, and the four panels that show
+Seven sources for a development or work machine, and the four panels that show
 them:
 
 | Source | Scope | Panel | Shows |
 | --- | --- | --- | --- |
 | `docker` | local | DOCKER | containers by compose project, restart loops, fresh crashes, expected containers |
 | `aws_auth` | local | ACCESS | the credentials the AWS CLI would use, the SSO token clock, an STS identity check |
+| `gcp_auth` | local, opt-in | ACCESS | the active gcloud account or credential-override label, and project access |
+| `azure_auth` | local, opt-in | ACCESS | the Azure CLI account and subscription, verified with a locations read |
 | `instances` | local, `#dev` hosts | INSTANCES | your EC2 instances: type, private IP, uptime |
-| `prs` | global | PULL REQUESTS | your open pull/merge requests on GitHub and GitLab, and the ones waiting on your review |
+| `prs` | global | PULL REQUESTS | your open pull/merge requests on GitHub, GitLab, Gitea, Forgejo and Bitbucket Cloud, and the ones waiting on your review |
 | `reach` | local, opt-in | ACCESS | ssh routes (a TCP connect, no login) and the endpoints you depend on |
 
 One rule runs through all of them: what is merely environmental renders as
@@ -18,7 +20,8 @@ dimmed, and none of them raises an alert. Alerts are for things you can act
 on.
 
 Every call is read-only: `docker ps`, `aws sts get-caller-identity`,
-`aws ec2 describe-instances`, one GitHub GraphQL query, GitLab `GET`s,
+`aws ec2 describe-instances`, `gcloud projects describe`, `az account list-locations`,
+one GitHub GraphQL query, GitLab/Gitea/Forgejo/Bitbucket `GET`s,
 `ssh -G`, TCP connects, and `GET`s to your endpoints. No credential is ever
 written to the cache: tokens stay in memory, AWS keys are never read out of
 the credentials file, and error text is scrubbed before it is stored.
@@ -158,6 +161,54 @@ STS check is the verdict).
 
 ---
 
+## gcp_auth and azure_auth
+
+These sources are off until their configuration tables exist (or `enabled = true`
+is set). They use your installed `gcloud` and `az` CLIs and their existing logins.
+No token is requested for display, and Porchlight never invokes a login command.
+As with AWS SSO, the official CLI may refresh its own cached credentials while
+performing the read-only API query.
+
+```toml
+[sources.gcp_auth]
+project = "example-dev"         # empty: the selected gcloud project's value
+configuration = ""              # empty: the CLI's active configuration
+login_command = "gcloud auth login"
+
+[sources.azure_auth]
+subscription = "Example development"  # name or ID; empty: the CLI's default
+login_command = "az login"
+```
+
+`login_command` is a displayed hint, never executed. Both sources accept the
+common `paths` setting for extra CLI search directories. To disable one, set
+`enabled = false` in its table.
+
+GCP reads the active account with `gcloud auth list`, and the project and
+credential selectors with a narrowly projected `gcloud config list`, then calls
+`gcloud projects describe`. When an access token, credential file or service
+account impersonation overrides the stored account, ACCESS says **credential
+override**: the successful API read does not verify that stored account.
+Override values and file paths are not cached. Azure reads `az account show`, then calls
+`az account list-locations` for that subscription. The latter uses the CLI's
+selected cloud, including sovereign clouds. Neither local account metadata nor
+a cached subscription alone proves access.
+
+| State | Meaning | Alert |
+| --- | --- | --- |
+| `ok` | a read-only provider API request succeeded | none |
+| `configured` | a cached identity exists, but no project/subscription is available to verify | none |
+| `none` | no login configured | none |
+| `rejected` | the CLI reports invalid or expired credentials | warning with a login hint |
+| `unreachable` | network, DNS or timeout failure | none |
+| `error` | missing permission, malformed output or another failed check | none |
+
+The ACCESS panel shows a configured account as **not verified** until a real
+API read succeeds. A permission failure is not treated as proof that the login
+expired.
+
+---
+
 ## instances
 
 Your EC2 instances from `aws ec2 describe-instances` (terminated ones left
@@ -200,7 +251,7 @@ Alerts: none. A stopped or pending instance is state.
 
 ## prs
 
-Your open pull requests on GitHub and merge requests on GitLab, newest first,
+Your open pull requests and merge requests across the configured forges, newest first,
 and the ones waiting on your review. Each row: mergeability (conflicts or
 not), approvals, changes requested, the CI result of the head commit, draft,
 last update.
@@ -234,6 +285,68 @@ detail = 10                          # your own GitLab MRs that get the approval
 
 As a global source it is collected on the hub and shipped to peers, so one
 machine's tokens serve the fleet.
+
+### Gitea, Forgejo and Bitbucket Cloud
+
+These providers require explicit opt-in and exact repository targets. Keep
+tokens in your configured secrets file, never in TOML URLs.
+
+```toml
+[sources.prs]
+gitea = true
+gitea_url = "https://git.example.com"
+gitea_repos = ["team/widgets"]
+
+forgejo = true
+forgejo_url = "https://code.example.com"
+forgejo_repos = ["team/tools"]
+
+bitbucket = true
+bitbucket_repos = ["workspace/service"]
+```
+
+- Gitea uses `GITEA_TOKEN`; Forgejo uses `FORGEJO_TOKEN`. Set the HTTPS base URL
+  of the instance (a subpath is supported) and a token with read access to the
+  user and listed repositories. The collector reads the current user, open
+  pull requests, the instance's API page limit, and review details where available.
+- Bitbucket Cloud uses `BITBUCKET_EMAIL` plus `BITBUCKET_API_TOKEN` for an
+  Atlassian API token, or `BITBUCKET_TOKEN` for a user access token (Bearer).
+  API tokens need `read:user:bitbucket` and `read:pullrequest:bitbucket` scopes
+  and access to the listed repos.
+  App passwords are not supported. Requests go only to `api.bitbucket.org`.
+- `repos` remains the optional cross-provider display allowlist. The provider
+  lists above select which repositories to query and must contain exact names,
+  not glob patterns.
+
+Requests are bounded per refresh. If a provider has more results than the budget
+allows, the panel says **showing a limited list**; visible counts then describe
+the collected subset. Each provider accepts at most ten repositories and reads
+up to five pages of fifty pull requests per repository, within a 25-second
+budget. Gitea/Forgejo review details cover up to the newest `min(detail, limit, 10)`
+of your own requests. Separately, the newest ten review candidates are checked
+for a pending request for you: Gitea/Forgejo can keep completed reviewers in
+their `requested_reviewers` field. Unconfirmed candidates are omitted and the
+panel marks the result as limited when there are more candidates or review
+details cannot be read completely. The instance's API page limit is used to
+account for reviews hidden from the response; if that limit is unavailable,
+review verdicts stay unknown and pending reviews are not inferred.
+
+A stale review can still request changes until it is
+dismissed or superseded. Older Gitea/Forgejo APIs without a `draft` field use the
+default `WIP:` and `[WIP]` title prefixes; custom server prefixes are not inferred.
+Bitbucket review requests with the current user's approval or change-request
+verdict are treated as completed reviews.
+
+New providers leave CI unknown; Bitbucket also leaves mergeability unknown.
+Gitea/Forgejo report mergeable only for a positive API result: a negative result
+also covers checks in progress and WIP requests, so it cannot establish a conflict.
+Disabled providers make no requests. Credentials are never
+forwarded through redirects or to a pagination URL on another host.
+
+If one of these providers fails, its last list is kept only when its instance
+URL and repository targets still match. Changing the target cannot display rows
+from the old instance as though they came from the new one. Mergeability and CI
+remain unknown when the provider does not supply them.
 
 If one forge fails (a self-hosted GitLab off VPN, say), its last rows are
 kept and the panel says so while the other forge stays live. If every forge

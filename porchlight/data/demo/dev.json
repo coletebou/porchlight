@@ -158,19 +158,34 @@
  },
  "prs": {
   "forges": [
+   "bb",
+   "fj",
    "gh",
-   "gl"
+   "gl",
+   "gt"
   ],
   "open": 6,
   "review_open": 3,
   "counts": {
+   "bb": {
+    "mine": 1,
+    "review": 0
+   },
+   "fj": {
+    "mine": 1,
+    "review": 0
+   },
    "gh": {
-    "mine": 5,
+    "mine": 2,
     "review": 2
    },
    "gl": {
     "mine": 1,
     "review": 1
+   },
+   "gt": {
+    "mine": 1,
+    "review": 0
    }
   },
   "mine": [
@@ -214,43 +229,43 @@
     "url": "https://github.com/acme/widgets/pull/131"
    },
    {
-    "forge": "gh",
+    "forge": "fj",
     "ref": "acme/gadgets#77",
     "n": 77,
     "title": "Move the base image to the new LTS release",
     "merge": "mergeable",
     "approvals": 0,
     "changes": 1,
-    "ci": "success",
+    "ci": null,
     "draft": false,
     "updated": "-172800",
-    "url": "https://github.com/acme/gadgets/pull/77"
+    "url": "https://code.example.com/acme/gadgets/pulls/77"
    },
    {
-    "forge": "gh",
+    "forge": "bb",
     "ref": "acme/docs#12",
     "n": 12,
     "title": "Document the plugin API",
-    "merge": "mergeable",
+    "merge": "unknown",
     "approvals": 1,
     "changes": 0,
-    "ci": "success",
+    "ci": null,
     "draft": false,
     "updated": "-259200",
-    "url": "https://github.com/acme/docs/pull/12"
+    "url": "https://bitbucket.org/acme/docs/pull-requests/12"
    },
    {
-    "forge": "gh",
+    "forge": "gt",
     "ref": "acme/widgets#140",
     "n": 140,
     "title": "Streaming CSV exports",
     "merge": "mergeable",
     "approvals": 0,
     "changes": 0,
-    "ci": "failure",
+    "ci": null,
     "draft": true,
     "updated": "-518400",
-    "url": "https://github.com/acme/widgets/pull/140"
+    "url": "https://git.example.com/acme/widgets/pulls/140"
    }
   ],
   "review": [
@@ -373,5 +388,25 @@
     "error": null
    }
   ]
+ },
+ "gcp_auth": {
+  "cli": true,
+  "state": "ok",
+  "account": "developer@example.com",
+  "project": "example-dev",
+  "configuration": "default",
+  "login": "gcloud auth login",
+  "status": "ok"
+ },
+ "azure_auth": {
+  "cli": true,
+  "state": "configured",
+  "account": "developer@example.com",
+  "subscription": "",
+  "subscription_id": "",
+  "tenant": "example-tenant",
+  "login": "az login",
+  "error": "select a subscription",
+  "status": "configured"
  }
 }

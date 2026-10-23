@@ -15,7 +15,8 @@ SECRET_HINTS = {  # env var → the source that will use it
     "STRIPE_SECRET_KEY": "stripe", "RESEND_API_KEY": "resend", "LANGFUSE_PUBLIC_KEY": "langfuse",
     "OPENROUTER_API_KEY": "ai_spend", "ANTHROPIC_ADMIN_KEY": "ai_spend", "OPENAI_ADMIN_KEY": "ai_spend",
     "XAI_MGMT_KEY": "ai_spend", "TWILIO_AUTH_TOKEN": "twilio", "GITLAB_TOKEN": "prs", "GH_TOKEN": "prs",
-    "GITHUB_TOKEN": "prs",
+    "GITHUB_TOKEN": "prs", "GITEA_TOKEN": "prs", "FORGEJO_TOKEN": "prs",
+    "BITBUCKET_TOKEN": "prs", "BITBUCKET_API_TOKEN": "prs",
 }
 DEV_PORTS = [(3000, "web"), (5173, "vite"), (8000, "api"), (8080, "http"), (4000, "app"), (5432, "postgres"),
              (6379, "redis"), (9000, "minio"), (11434, "ollama")]
@@ -150,6 +151,12 @@ def generate() -> tuple:
 
     L += ["[sources.weather]", "# Without coordinates wttr.in locates you by IP. With them: Open-Meteo, then NWS (US).",
           "# latitude = 40.71", "# longitude = -74.01", '# units = "imperial"   # or "metric"', ""]
+    for binary, source, setting in (("gcloud", "gcp_auth", 'project = "example-dev"'),
+                                    ("az", "azure_auth", 'subscription = "Example development"')):
+        if core.which(binary):
+            L += ["# [sources.%s]  # opt in to a read-only cloud account check" % source,
+                  "# " + setting, ""]
+            notes.append("%s: found; enable sources.%s to check its account" % (binary, source))
     if core.which("tailscale") or os.path.exists("/Applications/Tailscale.app"):
         L += ["[sources.tailscale]", "required = false   # true: alert when tailscaled is not running", ""]
         notes.append("tailscale: found")

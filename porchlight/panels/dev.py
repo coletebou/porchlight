@@ -1,13 +1,14 @@
-"""Developer panels: container stacks, pull requests, access (AWS credentials,
+"""Developer panels: container stacks, pull requests, access (cloud credentials,
 ssh routes, endpoints) and EC2 instances. Tailscale, ssh tunnels and dev ports
 live in the network panel, so none of that repeats here."""
 from __future__ import annotations
 
-from .. import core, theme as T
+from .. import core, registry, theme as T
 from ..ui import SEP, Panel, cells, kv, panel
 
 W = 10  # label column
 OFF_NET = ("timeout", "no route", "no dns")  # failures that mean "not on this network"
+FORGE_NAMES = {"gh": "github", "gl": "gitlab", "gt": "gitea", "fj": "forgejo", "bb": "bitbucket"}
 
 
 def _age(t) -> str:
@@ -150,12 +151,13 @@ def p_prs(x):
     if mine is None:  # a soft failure before any list arrived: say why
         err = str(d.get("error") or "no data")
         low = err.lower()
-        hint = "off VPN?" if any(s in low for s in OFF_NET) else ("gh auth login" if "unauthorized" in low else "")
+        github_rejected = any(e.strip().startswith("gh: unauthorized") for e in low.split(";"))
+        hint = "off VPN?" if any(s in low for s in OFF_NET) else ("gh auth login" if github_rejected else "")
         row = T.dot("unknown") + " " + T.dim(err) + ((" " + T.c(hint, "sky")) if hint else "")
         return Panel("prs", "PULL REQUESTS", [T.fit(row, cw)], "unknown", x.stale_note("prs", 4, 3600))
     review = d.get("review") or []
     if not d.get("forges") and not mine and not review:
-        return None  # no GitHub or GitLab credentials on this machine
+        return None  # no forge credentials on this machine
     rows, lvl = [], "ok"
     ready = [m for m in mine if not m.get("draft")]
     conf = sum(1 for m in ready if m.get("merge") == "conflicts")
@@ -200,12 +202,14 @@ def p_prs(x):
     for forge, err in sorted((d.get("errors") or {}).items()):
         kept = any(m.get("forge") == forge for m in mine + review)
         rows.append(T.fit(kv("", T.dot("unknown") + T.dim(" %s: %s%s" % (
-            {"gh": "github", "gl": "gitlab"}.get(forge, forge), err, _sep() + "last list kept" if kept else "")), W), cw))
+            FORGE_NAMES.get(forge, forge), err, _sep() + "last list kept" if kept else "")), W), cw))
+    for forge in d.get("truncated") or []:
+        rows.append(T.fit(kv("", T.dim("%s: showing a limited list" % FORGE_NAMES.get(forge, forge)), W), cw))
     note = _note("+".join(d.get("forges") or []), "%d open" % total if total else "", x.stale_note("prs", 4, 3600))
     return Panel("prs", "PULL REQUESTS", rows, lvl, note)
 
 
-# ── Access: AWS credentials, ssh routes, endpoints ──────────────────────────
+# ── Access: cloud credentials, ssh routes, endpoints ───────────────────────
 def _sts_row(a) -> str:
     s = a.get("sts") or {}
     state = s.get("state")
@@ -278,6 +282,28 @@ def _endpoint_cell(e) -> tuple:
     return "unknown", T.dot("unknown") + " " + T.dim(e.get("label", "?") + " " + why[:10])
 
 
+def _cloud_row(data, provider) -> str:
+    state = data.get("state")
+    login = data.get("login") or ("gcloud auth login" if provider == "gcp" else "az login")
+    if data.get("cli") is False:
+        return T.dot("unknown") + T.dim(" %s CLI not installed" % ("gcloud" if provider == "gcp" else "az"))
+    if state in ("ok", "configured"):
+        target = data.get("project") if provider == "gcp" else data.get("subscription") or data.get("subscription_id")
+        txt = T.dot("ok" if state == "ok" else "unknown") + " " + T.c(data.get("account") or "?", "fg")
+        if target:
+            txt += T.dim(" @ ") + str(target)
+        if state == "configured":
+            txt += T.dim(_sep() + "not verified: " + (data.get("error") or "select a project or subscription"))
+        return txt
+    if state == "rejected":
+        return T.dot("warn") + " " + T.c("credentials rejected", "amber") + T.dim(_sep()) + T.c(login, "sky")
+    if state == "none":
+        return T.dot("unknown") + T.dim(" not signed in" + _sep()) + T.c(login, "sky")
+    if state == "unreachable":
+        return T.dot("unknown") + T.dim(" unreachable (%s)" % (data.get("error") or "network"))
+    return T.dot("unknown") + T.dim(" " + (data.get("error") or "not checked yet"))
+
+
 @panel("access", title="ACCESS")
 def p_access(x):
     rows, lvl, cw = [], "ok", x.cw - 1
@@ -292,6 +318,21 @@ def p_access(x):
                 lvl = "crit"
             if sso.get("profiles"):
                 rows.append(T.fit(kv("sso", _sso_row(a), W), cw))
+    notes = []
+    for provider in ("gcp", "azure"):
+        name = provider + "_auth"
+        data = x.data(name)
+        if not data or not x.cfg.source_configured(name) or x.cfg.source(name).get("enabled") is False:
+            continue
+        src = registry.SOURCES.get(name)
+        if src is None or not registry.serves(src, x.host):
+            continue
+        rows.append(T.fit(kv(provider, _cloud_row(data, provider), W), cw))
+        if data.get("state") == "rejected":
+            lvl = T.worst(lvl, "warn")
+        note = x.stale_note(name, 4, 3600)
+        if note:
+            notes.append(provider + " " + note)
     r = x.data("reach")
     if r:
         ssh = r.get("ssh") or []
@@ -317,7 +358,11 @@ def p_access(x):
             rows.append(T.fit(kv("", T.dim(lead) + T.c("ssh -f -N -D 1080 " + hop, "sky"), W), cw))
     if not rows:
         return None
-    return Panel("access", "ACCESS", rows, lvl, x.stale_note("reach", 4, 3600) if r else x.stale_note("aws_auth", 4, 3600))
+    if r or a:
+        note = x.stale_note("reach", 4, 3600) if r else x.stale_note("aws_auth", 4, 3600)
+        if note:
+            notes.insert(0, note)
+    return Panel("access", "ACCESS", rows, lvl, _sep().join(notes))
 
 
 # ── EC2 instances ───────────────────────────────────────────────────────────
