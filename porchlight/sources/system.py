@@ -277,7 +277,7 @@ def repos(ctx):
     """Untracked-file counts (too slow for the login path; tracked state is live)."""
     out = {}
     for path in ctx.host.repos:
-        rc, txt, _ = core.run(["git", "-C", path, "status", "--porcelain", "-unormal"], 8)
+        rc, txt, _ = core.run(["git", "--no-optional-locks", "-C", path, "status", "--porcelain", "-unormal"], 8)
         if rc == 0:
             lines = txt.splitlines()
             out[path] = {"untracked": sum(1 for ln in lines if ln.startswith("??")),

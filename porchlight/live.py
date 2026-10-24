@@ -167,26 +167,33 @@ def _unit_name(u: str) -> str:
     return u if "." in u.split("@")[-1] else u + ".service"
 
 
-def _expand_globs(units, user=False) -> dict:
-    """{pattern: [unit names]} for glob patterns, via one list-units call."""
+def _expand_globs(units, user=False):
+    """{pattern: [unit names]} for glob patterns, via one list-units call; None
+    when systemctl could not answer (no bus, a timeout)."""
     pats = [u for u in units if any(ch in u for ch in "*?[")]
     if not pats:
         return {}
     argv = ["systemctl"] + (["--user"] if user else []) + [
         "list-units", "--all", "--plain", "--no-legend", "--no-pager"] + [_unit_name(p) for p in pats]
     rc, out, _ = core.run(argv, 3)
+    if rc != 0:
+        return None
     names = [line.split()[0] for line in out.splitlines() if line.split()]
     return {p: [n for n in names if fnmatch.fnmatchcase(n, _unit_name(p))] for p in pats}
 
 
 def _systemctl_show(units, user=False) -> dict:
-    """{unit: {Id, ActiveState, SubState, Result, NRestarts, LoadState}} in one call."""
+    """{unit: {Id, ActiveState, SubState, Result, NRestarts, LoadState}} in one call.
+    {} when systemctl could not answer: a unit it does not know still comes back,
+    with LoadState=not-found, so an empty answer is never a verdict."""
     if not units:
         return {}
     argv = ["systemctl"] + (["--user"] if user else []) + [
         "show", "--no-pager", "-p", "Id,LoadState,ActiveState,SubState,Result,NRestarts"]
     argv += [_unit_name(u) for u in units]
     rc, out, _ = core.run(argv, 3)
+    if rc != 0:
+        return {}
     res = {}
     for b in parse_show(out):
         if b.get("Id"):  # configs name units bare ("docker") or in full ("snap.x.y.service")
@@ -226,20 +233,27 @@ def units(host) -> list:
     if not wanted or core.IS_MAC:
         return []
     rescan = not host.units and _auto_known() is None
-    out_units = []
+    out_units, blind = [], set()  # blind: the scopes systemctl could not answer for
     for scope in ("system", "user"):
         names = [u for u, _, s in wanted if s == scope]
         globs = _expand_globs(names, scope == "user")
+        if globs is None:
+            blind.add(scope)
         for u, label, s in wanted:
             if s != scope:
                 continue
-            if u in globs:
+            if globs and u in globs:
                 out_units += [(n, label, s) for n in globs[u]]
             else:
                 out_units.append((u, label, s))
-    st = _systemctl_show([u for u, _, s in out_units if s == "system"])
-    st.update({("user:" + k): v for k, v in _systemctl_show([u for u, _, s in out_units if s == "user"], user=True).items()})
-    if rescan and st:  # remember which candidates exist (an empty answer is a systemctl failure, not a verdict)
+    st = {}
+    for scope in ("system", "user"):
+        names = [u for u, _, s in out_units if s == scope] if scope not in blind else []
+        got = _systemctl_show(names, user=scope == "user")
+        if names and not got:
+            blind.add(scope)
+        st.update(got if scope == "system" else {("user:" + k): v for k, v in got.items()})
+    if rescan and st and not blind:  # remember which candidates exist (an empty answer is a systemctl failure, not a verdict)
         keep, ids = [], set()
         for unit, label, _scope in out_units:
             info = st.get(unit) or st.get(unit.rsplit(".", 1)[0]) or {}
@@ -251,8 +265,12 @@ def units(host) -> list:
             core.write_json_atomic(_auto_path(), {"ts": core.now(), "units": keep})
         except OSError:
             pass
-    groups, seen = {}, set()  # label → unit states, in config order
+    groups, seen, unknown = {}, set(), set()  # label → unit states, in config order
     for unit, label, scope in out_units:
+        if scope in blind:
+            groups.setdefault(label, [])
+            unknown.add(label)
+            continue
         key = ("user:" + unit) if scope == "user" else unit
         info = st.get(key) or st.get(key.rsplit(".", 1)[0]) or {}
         ident = (scope, info.get("Id") or key)
@@ -264,7 +282,9 @@ def units(host) -> list:
     for label, infos in groups.items():
         present = [i for i in infos if i.get("LoadState") not in (None, "", "not-found")]
         if not present:
-            if host.units:  # you asked for it by name: gone is news, not noise
+            if host.units and label in unknown:  # systemd did not answer: unknown, not gone
+                out.append((label, "unknown", "unknown", []))
+            elif host.units:  # you asked for it by name: gone is news, not noise
                 out.append((label, "crit", "not found", []))
             continue
         up = sum(1 for i in present if i.get("ActiveState") == "active")
@@ -396,7 +416,7 @@ def repo(path: str):
     path = core.expand(path)
     if not os.path.exists(os.path.join(path, ".git")):
         return None
-    rc, out, _ = core.run(["git", "-C", path, "status", "--porcelain=v2", "--branch", "-uno"], 3)
+    rc, out, _ = core.run(["git", "--no-optional-locks", "-C", path, "status", "--porcelain=v2", "--branch", "-uno"], 3)
     if rc != 0:
         return None
     r = {"path": path, "branch": "?", "ahead": 0, "behind": 0, "dirty": 0}

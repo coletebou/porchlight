@@ -164,6 +164,9 @@ remote_login = true   # macOS: show whether Remote Login (sshd) is on
 Units sharing a label merge into one cell (`runners 3/3`). Globs expand with
 one `systemctl list-units` call. A unit that restarted three or more times
 shows `↻N`. A launchd daemon must have a PID; an interval job a zero last exit.
+A listed unit systemd does not know is crit `not found`; when `systemctl`
+itself cannot answer (no user bus over ssh, a timeout), that scope's units
+show as unknown and raise no alert.
 
 ## [system]
 

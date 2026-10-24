@@ -330,6 +330,26 @@ class Secrets(unittest.TestCase):
         self.assertNotIn("user:pw", out)
         self.assertIn("default", out)
 
+    def test_redact_masks_short_and_spaced_secrets_and_spares_words(self):
+        env = {"DB_PASSWORD": "hunter7", "PG_PASS": "tab\tsep  arated pw", "X_TOKEN": "none",
+               "SOME_AUTH": "subscription", "PIN_SECRET": "abc"}
+        out = secrets.redact("pw=hunter7 tab\tsep  arated pw; token none; mode subscription; pin abc; "
+                             "/mnt/disk-data down; key sk-abcdefghij", env)
+        self.assertNotIn("hunter7", out)  # seven characters, under a strong name
+        self.assertIn("<redacted:PG_PASS>", out)  # tabs and a run of spaces inside the value
+        self.assertNotIn("arated", out)
+        for kept in ("token none", "subscription", "pin abc", "/mnt/disk-data"):
+            self.assertIn(kept, out)  # a placeholder, a setting, too short to mask, a path
+        self.assertNotIn("abcdefghij", out)  # a token-shaped string is still cut
+        self.assertNotIn("arated", secrets.redact("pw tab sep arated pw", env))  # the value arrived flattened
+        self.assertNotIn("hunter7", secrets.mask("pw=hunter7\n", env))  # mask() uses the same rules
+        self.assertNotIn("quiet", secrets.redact("pw amber\tquiet\nriver", {"DB_PASSWORD": "amber quiet river"}))
+        settings = {"MAX_TOKENS": "4096", "TOKEN_TTL": "3600", "SECRET_BACKEND": "file", "SORT_KEY": "name",
+                    "SUDO_PASSWORD": "abcd"}
+        parsed = '{"max_tokens": 4096, "ttl": 3600, "backend": "file", "by": "name"}'
+        self.assertEqual(secrets.mask(parsed, settings), parsed)  # settings under TOKEN/SECRET/_KEY names
+        self.assertNotIn("abcd", secrets.redact("sudo abcd", settings))  # four characters under a password name
+
     def test_dotenv_parsing(self):
         p = os.path.join(support.TMP, "s.env")
         with open(p, "w") as f:
