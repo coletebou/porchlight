@@ -116,6 +116,38 @@ class Services(unittest.TestCase):
         with mock.patch("socket.create_connection", side_effect=AssertionError("network at login")):
             self.assertEqual(live.ports([(5432, "db", "db.example.com")]), [(5432, "db", None)])
 
+    def _units_when_systemctl(self, toml, rc, err):
+        """live.units() with every systemctl call answering (rc, "", err)."""
+        h = host(toml)
+        with mock.patch.object(core, "IS_MAC", False), mock.patch.object(core, "which", return_value="/bin/systemctl"), \
+                mock.patch.object(core, "run", return_value=(rc, "", err)):
+            return h, live.units(h)
+
+    def test_systemctl_without_a_bus_is_unknown_not_gone(self):
+        h, out = self._units_when_systemctl('[services]\nsystemd = ["nginx", "docker"]\n', 1, "Failed to connect to bus")
+        self.assertEqual([r[:3] for r in out], [("nginx", "unknown", "unknown"), ("docker", "unknown", "unknown")])
+        found = alerts.gather(h, registry.Cache(), self.lv(out))
+        self.assertFalse([a for a in found if "nginx" in a["msg"] or "docker" in a["msg"]])
+
+    def test_systemctl_timeout_is_unknown_not_gone(self):
+        _, out = self._units_when_systemctl('[services]\nsystemd_user = ["syncthing"]\n', 124, "timeout after 3.0s")
+        self.assertEqual([r[:3] for r in out], [("syncthing", "unknown", "unknown")])
+
+    def test_glob_that_systemctl_could_not_expand_is_unknown(self):
+        _, out = self._units_when_systemctl('[services]\nsystemd = [{ unit = "actions.runner.*", label = "runners" }]\n', 1, "Failed to connect to bus")
+        self.assertEqual([r[:3] for r in out], [("runners", "unknown", "unknown")])
+
+    def test_one_blind_scope_leaves_the_other_scope_alone(self):
+        h = host('[services]\nsystemd = ["nginx"]\nsystemd_user = ["syncthing"]\n')
+        nginx = "Id=nginx.service\nLoadState=loaded\nActiveState=active\nSubState=running\nResult=success\nNRestarts=0\n"
+
+        def run(argv, *a, **k):
+            return (1, "", "Failed to connect to bus") if "--user" in argv else (0, nginx, "")
+        with mock.patch.object(core, "IS_MAC", False), mock.patch.object(core, "which", return_value="/bin/systemctl"), \
+                mock.patch.object(core, "run", side_effect=run):
+            out = live.units(h)
+        self.assertEqual([r[:3] for r in out], [("nginx", "ok", ""), ("syncthing", "unknown", "unknown")])
+
     def test_failed_systemctl_answer_is_not_cached(self):
         support.clear_cache()
         h = host("")
