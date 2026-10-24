@@ -396,7 +396,7 @@ def repo(path: str):
     path = core.expand(path)
     if not os.path.exists(os.path.join(path, ".git")):
         return None
-    rc, out, _ = core.run(["git", "-C", path, "status", "--porcelain=v2", "--branch", "-uno"], 3)
+    rc, out, _ = core.run(["git", "--no-optional-locks", "-C", path, "status", "--porcelain=v2", "--branch", "-uno"], 3)
     if rc != 0:
         return None
     r = {"path": path, "branch": "?", "ahead": 0, "behind": 0, "dirty": 0}

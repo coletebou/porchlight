@@ -125,6 +125,56 @@ class Services(unittest.TestCase):
         self.assertIsNone(live._auto_known())
 
 
+class GitLocks(unittest.TestCase):
+    """Repo scans run under timeouts that kill them. A plain `git status` that
+    refreshes a stale index does it under .git/index.lock, so a kill mid-scan
+    leaves the lock behind and the user's next commit fails."""
+
+    def test_every_status_scan_skips_optional_locks(self):
+        import ast
+        root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "porchlight")
+        unguarded = []
+        for base, _dirs, files in os.walk(root):
+            for name in files:
+                if not name.endswith(".py"):
+                    continue
+                path = os.path.join(base, name)
+                with open(path, encoding="utf-8") as f:
+                    tree = ast.parse(f.read())
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.List):
+                        words = [e.value for e in node.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)]
+                        if "git" in words and "status" in words and "--no-optional-locks" not in words:
+                            unguarded.append("%s:%d" % (os.path.relpath(path, root), node.lineno))
+        self.assertEqual(unguarded, [])
+
+    def test_scans_leave_a_stale_index_alone(self):
+        import shutil
+        import subprocess
+        import tempfile
+        if not shutil.which("git"):
+            self.skipTest("git not installed")
+        env = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, env):
+            repo, index = os.path.join(tmp, "repo"), os.path.join(tmp, "repo", ".git", "index")
+            git = lambda *a: subprocess.run(["git", "-C", repo] + list(a), check=True, capture_output=True)  # noqa: E731
+            subprocess.run(["git", "init", "--quiet", repo], check=True)
+            with open(os.path.join(repo, "file"), "w") as f:
+                f.write("a\n")
+            git("add", "file")
+            git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--quiet", "-m", "init")
+
+            def stale():  # same content, older mtime: git status would rewrite the index entry
+                os.utime(os.path.join(repo, "file"), (time.time() - 86400, time.time() - 86400))
+                return os.stat(index).st_mtime_ns
+            before = stale()
+            self.assertIsNotNone(live.repo(repo))
+            system.repos(ctx(host('repos = ["%s"]\n' % repo)))
+            self.assertEqual(os.stat(index).st_mtime_ns, before)
+            git("status", "--porcelain")  # control: a plain status does rewrite it
+            self.assertNotEqual(os.stat(index).st_mtime_ns, before)
+
+
 class Certs(unittest.TestCase):
     def test_transport_failure_needs_two_strikes_bad_cert_is_crit(self):
         import ssl

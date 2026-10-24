@@ -13,6 +13,11 @@ All notable changes to this project are documented here. The format follows
   repository targets, bounded pagination and per-provider stale-data handling.
 - A migration guide for fleet-motd configurations.
 
+### Fixed
+- `git status` scans (the REPOS panel and the `repos` source) no longer take
+  optional locks, so a scan killed by its timeout cannot leave
+  `.git/index.lock` behind and break your next commit.
+
 ## [0.1.0] - 2026-10-21
 
 First public release.
