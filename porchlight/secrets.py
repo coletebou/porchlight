@@ -20,7 +20,8 @@ from . import core
 
 _ENV = None
 _SENSITIVE = re.compile(r"(KEY|TOKEN|SECRET|PASS|PWD|AUTH|CREDENTIAL|SID|PRIVATE|COOKIE|SESSION|URI|DSN)", re.I)
-_TOKENISH = re.compile(r"(xai-|sk-ant-|sk_live_|sk_test_|rk_live_|sk-|gh[pousr]_|glpat-|eyJ)[A-Za-z0-9._\-]{6,}")
+# Anchored so a word that merely contains a prefix ("disk-data") is left alone.
+_TOKENISH = re.compile(r"(?<![A-Za-z0-9])(xai-|sk-ant-|sk_live_|sk_test_|rk_live_|sk-|gh[pousr]_|glpat-|eyJ)[A-Za-z0-9._\-]{6,}")
 _LONG = re.compile(r"[A-Za-z0-9_\-+/=]{40,}")
 _URI_CREDS = re.compile(r"([a-z][a-z0-9+.\-]*://)[^\s/@:]+:[^\s/@]+@", re.I)
 
@@ -56,14 +57,30 @@ _STRONG = re.compile(r"(PASSWORD|PASSWD|SECRET|TOKEN|APIKEY|API_KEY|_KEY$|PRIVAT
 _NOT_SECRET = {"PWD", "OLDPWD", "SSH_AUTH_SOCK", "XAUTHORITY", "SSH_AGENT_PID", "GPG_AGENT_INFO"}
 
 
+_PASSWORDY = re.compile(r"(PASSWORD|PASSWD|PASSPHRASE)", re.I)
+_PLACEHOLDERS = {"true", "false", "none", "null", "unset", "empty"}  # settings, even under a password name
+
+
+def masks(name: str, value) -> bool:
+    """Whether a variable's value is scrubbed from text. Under a password name any
+    value of four or more characters is: a short password is still a password.
+    Under another strong name (SECRET, TOKEN, ..._KEY) eight characters are
+    needed, since MAX_TOKENS=4096 or SECRET_BACKEND=file is a setting and real
+    tokens are long. Under a weaker one, short plain words ('default',
+    'subscription') are skipped too: masking them would corrupt output, and real
+    secrets are long or contain digits or symbols."""
+    if not isinstance(value, str) or not _SENSITIVE.search(name) or name in _NOT_SECRET:
+        return False
+    if _PASSWORDY.search(name):
+        return len(value) >= 4 and value.lower() not in _PLACEHOLDERS
+    if _STRONG.search(name):
+        return len(value) >= 8
+    return len(value) >= 8 and (len(value) >= 20 or bool(re.search(r"[^A-Za-z]", value)))
+
+
 def sensitive_values(env: dict) -> list:
-    """Values of secret-looking variables, longest first. Short plain words
-    ('default', 'subscription') are skipped: masking them would corrupt output,
-    and real secrets are long or contain digits or symbols."""
-    vals = {v for k, v in env.items()
-            if isinstance(v, str) and len(v) >= 8 and _SENSITIVE.search(k) and k not in _NOT_SECRET
-            and (len(v) >= 20 or re.search(r"[^A-Za-z]", v) or _STRONG.search(k))}
-    return sorted(vals, key=len, reverse=True)
+    """Values of secret-looking variables (see masks), longest first."""
+    return sorted({v for k, v in env.items() if masks(k, v)}, key=len, reverse=True)
 
 
 def child_env(env: dict, keep=()) -> dict:
@@ -93,13 +110,21 @@ def redact(text, env=None, limit: int = 300) -> str:
     """Scrub secret values (by name) and token-shaped strings from error text."""
     if not text:
         return text
-    text = " ".join(str(text).split())
     if env is None:
         env = _ENV or {}
-    for v in sensitive_values(env):
-        if v in text:
-            name = next((k for k, x in env.items() if x == v and _SENSITIVE.search(k) and k not in _NOT_SECRET), "secret")
-            text = text.replace(v, "<redacted:%s>" % name)
+    named = [(v, next((k for k, x in env.items() if x == v and masks(k, x)), "secret")) for v in sensitive_values(env)]
+    # Values first, on the raw text: collapsing whitespace before would let a secret
+    # with tabs, newlines or runs of spaces slip past. Then every value once more,
+    # flattened, on the collapsed text: "amber quiet river" printed with a tab and
+    # a newline matches only after the collapse.
+    text = str(text)
+    for v, name in named:
+        text = text.replace(v, "<redacted:%s>" % name)
+    text = " ".join(text.split())
+    for v, name in named:
+        flat = " ".join(v.split())
+        if flat:
+            text = text.replace(flat, "<redacted:%s>" % name)
     text = _URI_CREDS.sub(r"\1<redacted>@", text)
     text = _TOKENISH.sub(lambda m: m.group(1) + "…", text)
     text = _LONG.sub("<redacted>", text)

@@ -20,6 +20,11 @@ All notable changes to this project are documented here. The format follows
 - A systemd scope that `systemctl` cannot answer for (no bus, a timeout) shows
   its units as unknown, without alerts, instead of reporting every configured
   unit as crit "not found". Globs it could not expand no longer vanish.
+- Error text masks a secret under a password name (PASSWORD, PASSWD,
+  PASSPHRASE) from four characters instead of eight, and masks values whose
+  whitespace differs from the text's (tabs, newlines, runs of spaces), which
+  collapsing whitespace first used to let through. Words that merely contain a
+  token prefix ("disk-data") stay intact.
 
 ## [0.1.0] - 2026-10-21
 
