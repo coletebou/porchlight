@@ -116,6 +116,38 @@ class Services(unittest.TestCase):
         with mock.patch("socket.create_connection", side_effect=AssertionError("network at login")):
             self.assertEqual(live.ports([(5432, "db", "db.example.com")]), [(5432, "db", None)])
 
+    def _units_when_systemctl(self, toml, rc, err):
+        """live.units() with every systemctl call answering (rc, "", err)."""
+        h = host(toml)
+        with mock.patch.object(core, "IS_MAC", False), mock.patch.object(core, "which", return_value="/bin/systemctl"), \
+                mock.patch.object(core, "run", return_value=(rc, "", err)):
+            return h, live.units(h)
+
+    def test_systemctl_without_a_bus_is_unknown_not_gone(self):
+        h, out = self._units_when_systemctl('[services]\nsystemd = ["nginx", "docker"]\n', 1, "Failed to connect to bus")
+        self.assertEqual([r[:3] for r in out], [("nginx", "unknown", "unknown"), ("docker", "unknown", "unknown")])
+        found = alerts.gather(h, registry.Cache(), self.lv(out))
+        self.assertFalse([a for a in found if "nginx" in a["msg"] or "docker" in a["msg"]])
+
+    def test_systemctl_timeout_is_unknown_not_gone(self):
+        _, out = self._units_when_systemctl('[services]\nsystemd_user = ["syncthing"]\n', 124, "timeout after 3.0s")
+        self.assertEqual([r[:3] for r in out], [("syncthing", "unknown", "unknown")])
+
+    def test_glob_that_systemctl_could_not_expand_is_unknown(self):
+        _, out = self._units_when_systemctl('[services]\nsystemd = [{ unit = "actions.runner.*", label = "runners" }]\n', 1, "Failed to connect to bus")
+        self.assertEqual([r[:3] for r in out], [("runners", "unknown", "unknown")])
+
+    def test_one_blind_scope_leaves_the_other_scope_alone(self):
+        h = host('[services]\nsystemd = ["nginx"]\nsystemd_user = ["syncthing"]\n')
+        nginx = "Id=nginx.service\nLoadState=loaded\nActiveState=active\nSubState=running\nResult=success\nNRestarts=0\n"
+
+        def run(argv, *a, **k):
+            return (1, "", "Failed to connect to bus") if "--user" in argv else (0, nginx, "")
+        with mock.patch.object(core, "IS_MAC", False), mock.patch.object(core, "which", return_value="/bin/systemctl"), \
+                mock.patch.object(core, "run", side_effect=run):
+            out = live.units(h)
+        self.assertEqual([r[:3] for r in out], [("nginx", "ok", ""), ("syncthing", "unknown", "unknown")])
+
     def test_failed_systemctl_answer_is_not_cached(self):
         support.clear_cache()
         h = host("")
@@ -123,6 +155,56 @@ class Services(unittest.TestCase):
                 mock.patch.object(live, "_systemctl_show", return_value={}), mock.patch.object(live, "_expand_globs", return_value={}):
             live.units(h)
         self.assertIsNone(live._auto_known())
+
+
+class GitLocks(unittest.TestCase):
+    """Repo scans run under timeouts that kill them. A plain `git status` that
+    refreshes a stale index does it under .git/index.lock, so a kill mid-scan
+    leaves the lock behind and the user's next commit fails."""
+
+    def test_every_status_scan_skips_optional_locks(self):
+        import ast
+        root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "porchlight")
+        unguarded = []
+        for base, _dirs, files in os.walk(root):
+            for name in files:
+                if not name.endswith(".py"):
+                    continue
+                path = os.path.join(base, name)
+                with open(path, encoding="utf-8") as f:
+                    tree = ast.parse(f.read())
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.List):
+                        words = [e.value for e in node.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)]
+                        if "git" in words and "status" in words and "--no-optional-locks" not in words:
+                            unguarded.append("%s:%d" % (os.path.relpath(path, root), node.lineno))
+        self.assertEqual(unguarded, [])
+
+    def test_scans_leave_a_stale_index_alone(self):
+        import shutil
+        import subprocess
+        import tempfile
+        if not shutil.which("git"):
+            self.skipTest("git not installed")
+        env = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, env):
+            repo, index = os.path.join(tmp, "repo"), os.path.join(tmp, "repo", ".git", "index")
+            git = lambda *a: subprocess.run(["git", "-C", repo] + list(a), check=True, capture_output=True)  # noqa: E731
+            subprocess.run(["git", "init", "--quiet", repo], check=True)
+            with open(os.path.join(repo, "file"), "w") as f:
+                f.write("a\n")
+            git("add", "file")
+            git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "--quiet", "-m", "init")
+
+            def stale():  # same content, older mtime: git status would rewrite the index entry
+                os.utime(os.path.join(repo, "file"), (time.time() - 86400, time.time() - 86400))
+                return os.stat(index).st_mtime_ns
+            before = stale()
+            self.assertIsNotNone(live.repo(repo))
+            system.repos(ctx(host('repos = ["%s"]\n' % repo)))
+            self.assertEqual(os.stat(index).st_mtime_ns, before)
+            git("status", "--porcelain")  # control: a plain status does rewrite it
+            self.assertNotEqual(os.stat(index).st_mtime_ns, before)
 
 
 class Certs(unittest.TestCase):

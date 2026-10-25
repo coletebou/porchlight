@@ -95,7 +95,7 @@ def gather(host, cache, lv) -> list:
     failed_ids = {u.split(":", 1)[-1] for u in failed}
     optional = {str(o) for o in host.cfg.items("services.optional")}
     for label, lvl, detail, ids in lv.get("units") or []:
-        if lvl != "ok" and label not in optional and not (set(ids) & failed_ids):  # already reported as a failed unit
+        if lvl not in ("ok", "unknown") and label not in optional and not (set(ids) & failed_ids):  # already reported as a failed unit
             add(lvl, "%s %s on %s" % (label, detail or "down", host.label))
     for label, lvl, detail, _job in lv.get("launchd") or []:
         if lvl != "ok":
