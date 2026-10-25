@@ -69,8 +69,8 @@ command = "true"
 def _core_fixtures(now: float) -> dict:
     pid = os.getpid()  # alive for as long as the demo runs, so tunnels render as up
 
-    def snap(label, load, cores, mem, disk, crit=0, warn=0, agents=None, badge=None, age=40):
-        s = {"v": 1, "host": label, "label": label, "ts": now - age, "load": load, "cores": cores, "mem": mem,
+    def snap(label, load, cores, mem, disk, crit=0, warn=0, agents=None, badge=None, age=40, swap=None):
+        s = {"v": 1, "host": label, "label": label, "ts": now - age, "load": load, "cores": cores, "mem": mem, "swap": swap,
              "disks": [{"m": "/", "p": disk}], "agents": {"total": sum((agents or {}).values()), "by": agents or {}},
              "counts": {"crit": crit, "warn": warn}, "alerts": []}
         if badge:
@@ -123,9 +123,9 @@ def _core_fixtures(now: float) -> dict:
         "restic": {"status": "ok", "summary": "last snapshot 5h ago · 412 GiB · 0 errors",
                    "rows": [{"label": "repository", "value": "b2:acme-backups", "status": "ok"},
                             {"label": "snapshots", "value": "1,284 (30 daily · 12 monthly)"}]},
-        "fleet": {"hosts": {"web-1": snap("web-1", 0.42, 4, 41, 63, badge="12/12"),
-                            "db-1": snap("db-1", 1.21, 8, 78, 88, warn=1),
-                            "gpu-box": snap("gpu-box", 7.93, 8, 92, 71, crit=1, agents={"claude": 2, "codex": 1}),
+        "fleet": {"hosts": {"web-1": snap("web-1", 0.42, 4, 41, 63, badge="12/12", swap=3),
+                            "db-1": snap("db-1", 1.21, 8, 78, 88, warn=1, swap=34),
+                            "gpu-box": snap("gpu-box", 7.93, 8, 92, 71, crit=1, swap=86, agents={"claude": 2, "codex": 1}),
                             "nas": {"ok": False, "seen": now - 7200, "error": "ssh timeout", "fails": 3}}},
     }
 

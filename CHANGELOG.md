@@ -12,6 +12,8 @@ All notable changes to this project are documented here. The format follows
 - Gitea, Forgejo and Bitbucket Cloud providers in PULL REQUESTS, with explicit
   repository targets, bounded pagination and per-provider stale-data handling.
 - A migration guide for fleet-motd configurations.
+- A swap column in the FLEET table, coloured by `swap_warn`/`swap_crit`; `-`
+  for machines without swap.
 
 ### Fixed
 - `git status` scans (the REPOS panel and the `repos` source) no longer take

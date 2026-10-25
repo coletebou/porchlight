@@ -200,6 +200,7 @@ def fleet_table(x) -> dict:
     own.update({"host": x.host.name, "label": x.host.label, "ts": core.now(),
                 "load": round(x.v["load"][0], 2), "cores": x.v["cores"],
                 "mem": round(core.pct(x.v["mem"]["used"], x.v["mem"]["total"])),
+                "swap": round(core.pct(x.v["swap"]["used"], x.v["swap"]["total"])) if x.v["swap"]["total"] else None,
                 "disks": [{"m": d["mount"], "p": round(d["pct"])} for d in x.v["disks"]],
                 "counts": {"crit": sum(1 for a in mine if a["sev"] == "crit"),
                            "warn": sum(1 for a in mine if a["sev"] == "warn")}})
@@ -216,9 +217,10 @@ def p_fleet(x):
     labels = x.cfg.table("fleet.labels")
     ts_rows = {r["name"]: r for r in (x.data("tailscale") or {}).get("rows") or []}
     names = [n for n in order if n in table] + sorted(n for n in table if n not in order)
-    hdr = T.dim("%-11s %5s %4s %4s  %-9s %-8s %s" % ("host", "load", "mem", "disk", "agents", "alerts", "seen"))
+    hdr = T.dim("%-11s %5s %4s %4s %4s %-9s %-7s %s" % ("host", "load", "mem", "swap", "disk", "agents", "alerts", "seen"))
     rows, lvl = [" " + hdr], "ok"
     dw, dc = _thr(x, "disk_warn", 85), _thr(x, "disk_crit", 92)
+    sw_w, sw_c = _thr(x, "swap_warn", 80), _thr(x, "swap_crit", 95)
     for n in names:
         rec = table.get(n) or {}
         snap = rec.get("snap") or {}
@@ -250,6 +252,8 @@ def p_fleet(x):
         lvl = T.worst(lvl, state)
         load, cores = snap.get("load", 0), snap.get("cores") or 1
         disk = max((d.get("p", 0) for d in snap.get("disks") or []), default=0)
+        sw = snap.get("swap")  # None or absent: no swap (or a snapshot from before the column)
+        swap = T.dim("-") if sw is None else T.sev("%d%%" % sw, T.level_for(sw, sw_w, sw_c))
         ag = snap.get("agents") or {}
         if snap.get("badge"):
             agents = str(snap["badge"])[:9]
@@ -265,8 +269,9 @@ def p_fleet(x):
         rows.append(T.dot(state) + " " + T.pad(T.c(label, "fg"), 10) + " " +
                     T.pad(T.sev(fnum(load), T.level_for(100 * load / cores, 70, 100)), 5, ">") + " " +
                     T.pad(T.sev("%d%%" % snap.get("mem", 0), T.level_for(snap.get("mem", 0), 85, 95)), 4, ">") + " " +
-                    T.pad(T.sev("%d%%" % disk, T.level_for(disk, dw, dc)), 4, ">") + "  " +
-                    T.pad(agents, 9) + " " + T.pad(" ".join(badges) or T.c("ok", "green"), 8) + " " +
+                    T.pad(swap, 4, ">") + " " +
+                    T.pad(T.sev("%d%%" % disk, T.level_for(disk, dw, dc)), 4, ">") + " " +
+                    T.pad(agents, 9) + " " + T.pad(" ".join(badges) or T.c("ok", "green"), 7) + " " +
                     T.dim("now" if age < 90 else core.human_age(age)))
     if x.host.hub:
         note = x.stale_note("fleet", 4, 900)
