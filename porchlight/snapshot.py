@@ -24,7 +24,7 @@ def build(host, cache=None) -> dict:
         "v": 1, "host": host.name, "label": host.label, "identity": host.identity, "ts": core.now(),
         "os": v.get("os"), "uptime": v.get("uptime"), "load": round(v["load"][0], 2), "cores": v["cores"],
         "mem": round(core.pct(v["mem"]["used"], v["mem"]["total"])),
-        "swap": round(core.pct(v["swap"]["used"], v["swap"]["total"])) if v["swap"]["total"] else 0,
+        "swap": round(core.pct(v["swap"]["used"], v["swap"]["total"])) if v["swap"]["total"] else None,
         "disks": [{"m": d["mount"], "p": round(d["pct"])} for d in v["disks"]],
         "agents": {"total": sum(int(a.get("count", 0)) for a in agents.values() if isinstance(a, dict)),
                    "by": {k: int(a.get("count", 0)) for k, a in agents.items() if isinstance(a, dict) and a.get("count")}},

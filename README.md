@@ -70,7 +70,7 @@ git clone https://github.com/coletebou/porchlight ~/.local/share/porchlight
 | **AI LIMITS** | Claude, Codex, Cursor and Grok plan windows (5 h / 7 d / per model) with reset times and credits, read-only |
 | **DOCKER** | compose stacks up/total, unhealthy, restarting, recent crashes (not clean exits or deliberate stops), expected containers missing |
 | **PULL REQUESTS** | yours and those awaiting your review on GitHub, GitLab, Gitea, Forgejo and Bitbucket Cloud: conflicts, approvals, changes requested, CI where available |
-| **FLEET** | every machine's load, memory, disk, agents and alerts, offline detection that ignores Tailscale's flapping bit |
+| **FLEET** | every machine's load, memory, swap, disk, agents and alerts, offline detection that ignores Tailscale's flapping bit |
 | **NETWORK** | Tailscale peers and key expiry, live ssh tunnels (`-L`/`-R`/`-D`), your dev ports (⇄ when served through a tunnel) |
 | **ACCESS** | AWS identity and SSO token clock, opt-in GCP and Azure account checks, VPN/VPC reachability, internal endpoints (direct or via SOCKS) |
 | **INSTANCES** | your EC2 instances, with start hints for stopped ones |

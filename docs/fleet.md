@@ -64,13 +64,15 @@ fleet.peers = ["web-1", "db-1", "gpu-box"]
 ## The fleet table
 
 ```
- host         load  mem disk  agents    alerts   seen
-● hub          0.84  52%  61%  3cl 2co   ok       now
-● web-1        0.42  41%  63%  12/12 ok       now
-● db-1         1.21  78%  88%  -         1▲       now
+ host         load  mem swap disk agents    alerts  seen
+● hub          0.84  52%   9%  61% 3cl 2co   ok      now
+● web-1        0.42  41%   3%  63% 12/12     ok      now
+● db-1         1.21  78%  34%  88% -         1▲      now
 ● nas         offline
 ```
 
+- `swap` is the peer's swap use, coloured by `swap_warn`/`swap_crit`; `-` means
+  the machine has no swap.
 - `agents` shows AI coding agent counts by default, or a source's `badge`
   (set `fleet.badge = "docker"` on a peer to show `running/expected`
   containers).
