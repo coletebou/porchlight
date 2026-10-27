@@ -372,16 +372,17 @@ def narrows(f) -> bool:
     """Whether a budget's FilterExpression narrows what it counts. The console's default for a
     new budget, {"Not": {"Dimensions": {"Key": "RECORD_TYPE", "Values": ["Credit", "Refund"]}}},
     only leaves out record types and still covers the whole account; any other filter narrows
-    it (a service, a tag, a cost category, a Bedrock model, or a kind this code does not know)."""
+    it (a service, a tag, a cost category, a Bedrock model, or a kind this code does not know).
+    An empty leaf still filters ({"Tags": {}} selects the untagged costs), and the AWS CLI drops
+    a member its model does not know, so a filter of a kind AWS added later arrives as {}: that
+    narrows too."""
     if f is None:
         return False
     if isinstance(f, list):
         return any(narrows(v) for v in f)
-    if not isinstance(f, dict):
+    if not isinstance(f, dict) or not f:
         return True
     for k, v in f.items():
-        if v is None:   # an empty leaf still filters: {"Tags": {}} selects the untagged costs
-            continue
         if k in ("And", "Or", "Not"):
             if narrows(v):
                 return True

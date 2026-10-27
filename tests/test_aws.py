@@ -259,6 +259,9 @@ class Inventory(Base):
         self.assertTrue(aws.narrows({"ProductAttributes": {"Key": "provider", "Values": ["Anthropic"]}}))
         self.assertTrue(aws.narrows({"Not": {"Workloads": {"Key": "x", "Values": ["y"]}}}))  # a kind from later
         self.assertTrue(aws.narrows({"Tags": {}}))                                            # the untagged costs
+        self.assertTrue(aws.narrows({"Tags": None}))
+        self.assertTrue(aws.narrows({}))                  # a kind the CLI's model does not know arrives empty
+        self.assertTrue(aws.narrows({"Not": {}}))
         self.assertTrue(aws.narrows({"CostCategories": {"Key": "env", "MatchOptions": ["ABSENT"]}}))
         self.assertFalse(aws.narrows({"Or": [{"Dimensions": {"Key": "RECORD_TYPE", "Values": ["Usage"]}},
                                              {"Dimensions": {"Key": "RECORD_TYPE", "Values": ["Tax"]}}]}))
