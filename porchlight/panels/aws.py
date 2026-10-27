@@ -291,6 +291,8 @@ def p_aws(x):
         rows.append(kv("month", month_line(mv, room), W))
     elif _s(a.get("budget_error"), 80):  # no month to show, and the budgets could not be read: say why
         rows.append(kv("month", T.dim(_line("budgets: " + _s(a["budget_error"], 80), room)), W))
+    if _s(a.get("budget_note"), 80) and not (mv and mv["budget"]):  # a CLI that cannot read budget filters
+        rows.append(kv("budget", T.c(_line(_s(a["budget_note"], 80), room), "amber"), W))
     if c.get("ce_error"):
         rows.append(kv("daily", T.dim(_line("Cost Explorer: " + _s(c["ce_error"], 160), room)), W))
     else:

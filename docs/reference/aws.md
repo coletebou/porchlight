@@ -89,7 +89,10 @@ leaves out credits and refunds; a budget narrowed any other way (a service, a ta
 a cost category, a linked account, a Bedrock model, a custom billing view, or a
 kind of filter porchlight does not know yet) is not it. Its actual spend, which
 AWS refreshes a few times a day, is the month to date in the panel when there is
-one.
+one. Reading those filters takes AWS CLI 2.28.4 or newer (v1: botocore 1.40.4):
+an older CLI leaves them out of its replies, so with one no budget counts as the
+account's, and the panel's budget row says which CLI to install. The check is
+`aws --version`, which calls no API.
 
 **What is kept.** Counts, prices and names: the account id's last four digits,
 never the whole id, the role session name or a public address. Any account id in

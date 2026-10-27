@@ -38,6 +38,9 @@ REGIONS_TTL = 86400    # describe-regions, once a day
 MAX_PROFILES = 8
 IDENTITY_BUDGET = 20.0  # seconds to find a profile STS accepts
 PRICE_LOOKUPS = 24     # price keys looked up per run; a large account fills its cache over a few runs
+# The first CLI whose budgets model has FilterExpression (2.26.6) and BillingViewArn (2.28.4);
+# v1 is judged by the botocore it prints (1.37.38, 1.40.4). An older one drops both from replies.
+BUDGET_FILTERS_CLI, BUDGET_FILTERS_BOTOCORE = (2, 28, 4), (1, 40, 4)
 LIVE = ("pending", "running")
 _REGION = re.compile(r"^[a-z]{2}(?:-[a-z]+)+-\d{1,2}$")
 _ACCOUNT = re.compile(r"^\d{12}$")
@@ -87,16 +90,19 @@ def _aws_err(stderr) -> str:
     return masked(_scrub(lines[-1] if lines else "aws failed", 80))
 
 
-def cli(ctx, args, profile, region=None, timeout=CLI_TIMEOUT, env=None, read_timeout=10):
+def cli(ctx, args, profile, region=None, timeout=CLI_TIMEOUT, env=None, read_timeout=10, raw=False):
     """Every aws call the AWS sources make, as JSON. No pager, no prompt, no instance
     metadata probe, short connect and read timeouts; the child sees the AWS settings
     and no other secret (service bearer tokens included). Raises ProbeError, whose
-    text never holds a whole account id."""
+    text never holds a whole account id. raw: what it printed, as one line of text
+    (`--version`, which prints no JSON and calls no API)."""
     from .. import secrets
     b = aws_bin(ctx)
     if not b:
         raise ProbeError("aws CLI not found")
-    argv = [b] + args + ["--output", "json", "--cli-connect-timeout", "4", "--cli-read-timeout", str(int(read_timeout))]
+    argv = [b] + args
+    if not raw:
+        argv += ["--output", "json", "--cli-connect-timeout", "4", "--cli-read-timeout", str(int(read_timeout))]
     if profile:
         argv += ["--profile", profile]
     if region:
@@ -109,6 +115,8 @@ def cli(ctx, args, profile, region=None, timeout=CLI_TIMEOUT, env=None, read_tim
         raise ProbeError({124: "timeout", 126: "cannot run aws", 127: "aws CLI not found"}[rc])
     if rc != 0:
         raise ProbeError(_aws_err(err))
+    if raw:
+        return " ".join(((out or "") + " " + (err or "")).split())[:200]
     try:
         return json.loads(out or "null")
     except ValueError:
@@ -391,11 +399,33 @@ def narrows(f) -> bool:
     return False
 
 
-def budgets(ctx, prof, acct) -> list:
+def cli_version(line) -> str:
+    """ "2.38.6", or "1.33.0 (botocore 1.40.4)" for v1, from an `aws --version` line; "" if none."""
+    m = re.search(r"aws-cli/(\d+\.\d+\.\d+)", line or "")
+    b = re.search(r"botocore/(\d+\.\d+\.\d+)", line or "")
+    return (m.group(1) + (" (botocore %s)" % b.group(1) if b else "")) if m else ""
+
+
+def reads_budget_filters(line) -> bool:
+    """Whether the CLI that printed this `aws --version` line keeps a budget's FilterExpression and
+    BillingViewArn. One that cannot would show every filtered budget as the account's."""
+    m = re.search(r"aws-cli/(\d+)\.(\d+)\.(\d+)", line or "")
+    if not m:
+        return False
+    ver = tuple(int(g) for g in m.groups())
+    if ver[0] != 1:
+        return ver >= BUDGET_FILTERS_CLI
+    b = re.search(r"botocore/(\d+)\.(\d+)\.(\d+)", line)
+    return bool(b) and tuple(int(g) for g in b.groups()) >= BUDGET_FILTERS_BOTOCORE
+
+
+def budgets(ctx, prof, acct, filters=True) -> list:
     """The account's COST budgets (the Budgets API is free; AWS refreshes the spend a few
     times a day). The account id goes to the CLI's argv, never into the result. A budget is
     scoped by its legacy CostFilters, by its FilterExpression, or by a billing view other than
-    the account's primary one; the view's ARN holds the account id and is not kept."""
+    the account's primary one; the view's ARN holds the account id and is not kept.
+    filters=False (a CLI too old to return those fields): no budget can be shown to cover the
+    whole account, so every one is scoped."""
     out = []
     for b in _dicts(cli(ctx, ["budgets", "describe-budgets", "--account-id", acct, "--query", _Q_BUDGETS],
                         prof, "us-east-1")):
@@ -406,8 +436,8 @@ def budgets(ctx, prof, acct) -> list:
         out.append({"name": _text(b.get("n"), 40), "unit": _text(b.get("u"), 12), "limit": round(lim, 2),
                     "actual": round(act, 2), "forecast": None if fc is None else round(fc, 2),
                     "updated": _epoch(b.get("up")),
-                    "scoped": (any(str(k).lower() != "recordtype" for k in _d(b.get("f"))) or narrows(b.get("fx"))
-                               or (bool(view) and not view.endswith("/primary")))})
+                    "scoped": (not filters or any(str(k).lower() != "recordtype" for k in _d(b.get("f")))
+                               or narrows(b.get("fx")) or (bool(view) and not view.endswith("/primary")))})
     return out[:12]
 
 
@@ -482,13 +512,20 @@ def _aws_account(ctx):
                               limit=PRICE_LOOKUPS if left() > 10 else 0)
     spot = spot_prices(ctx, prof, instances, workers, timeout=max(1.0, left() - 5)) if left() > 6 else {}
     burn, idle = costs(instances, vols, eips, hosts, prices, spot)
-    berr = None
+    berr, ver, filters = None, "", True
     try:
         if left() < 3:
             raise ProbeError("skipped: out of time")
-        brows = budgets(ctx, prof, acct)
+        try:
+            ver = cli(ctx, ["--version"], None, timeout=min(CLI_TIMEOUT, left()), raw=True)
+        except ProbeError:
+            ver = ""
+        filters = reads_budget_filters(ver)
+        brows = budgets(ctx, prof, acct, filters)
     except ProbeError as e:
         brows, berr = [b for b in prev.get("budgets") or [] if isinstance(b, dict)], masked(e)
+    if not filters:  # last run's rows too: this CLI cannot confirm any of them
+        brows = [dict(b, scoped=True) for b in brows]
     swept = {str(k): v for k, v in _d(st.get("swept")).items() if k in enabled}
     swept.update({r: int(now) for r in regs if not regs[r]["err"]})
     rank = {"running": 0, "pending": 0, "stopping": 1, "stopped": 2}
@@ -512,6 +549,9 @@ def _aws_account(ctx):
         d["profile_errors"] = errs  # profiles tried before the one that answered
     if berr:
         d["budget_error"] = berr
+    if brows and not filters:
+        d["budget_note"] = "aws CLI %s too old for budget filters: needs %s+" % (
+            cli_version(ver) or "(version unknown)", ".".join(map(str, BUDGET_FILTERS_CLI)))
     if perrs:
         d["price_errors"] = {k: masked(v) for k, v in sorted(perrs.items())[:4]}
     status, al = _verdict("aws", [], alerts(instances, vols, hosts, home, account_budget(brows), twice))

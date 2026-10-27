@@ -86,8 +86,8 @@ class FakeAWS:
     returns stderr text to fail with, or None. Every call is recorded."""
 
     def __init__(self, regions=None, enabled=("us-east-1", "us-east-2"), budgets=(), sts_ok=("readonly",), spot="0.0712",
-                 ce=None, fail=None, sts_err=NO_CREDS, delay=0.0):
-        self.regions, self.enabled, self.budgets = regions or {}, list(enabled), list(budgets)
+                 ce=None, fail=None, sts_err=NO_CREDS, delay=0.0, version="aws-cli/2.38.6 Python/3.15.2 Linux/6.8.0 exe/x86_64"):
+        self.regions, self.enabled, self.budgets, self.version = regions or {}, list(enabled), list(budgets), version
         self.sts_ok, self.spot, self.ce, self.fail, self.sts_err, self.delay = sts_ok, spot, ce, fail, sts_err, delay
         self.calls, self.lock, self.active, self.peak = [], threading.Lock(), 0, 0
 
@@ -96,6 +96,8 @@ class FakeAWS:
 
     def __call__(self, argv, timeout=None, env=None, input_text=None, cwd=None):
         args = argv[1:]
+        if args == ["--version"]:  # no API call: not recorded
+            return 0, self.version + "\n", ""
         svc, cmd = args[0], args[1]
         prof = args[args.index("--profile") + 1] if "--profile" in args else None
         region = args[args.index("--region") + 1] if "--region" in args else None
@@ -266,6 +268,38 @@ class Inventory(Base):
         self.assertFalse(aws.narrows({"Or": [{"Dimensions": {"Key": "RECORD_TYPE", "Values": ["Usage"]}},
                                              {"Dimensions": {"Key": "RECORD_TYPE", "Values": ["Tax"]}}]}))
         self.assertFalse(aws.narrows(None))
+
+    def test_the_cli_releases_that_keep_budget_filters(self):
+        cases = {"aws-cli/2.38.6 Python/3.15.2 Darwin/25.6.0 source/arm64": True,
+                 "aws-cli/2.28.4 Python/3.12.6 Linux/6.8.0 exe/x86_64.ubuntu.24": True,   # BillingViewArn arrived
+                 "aws-cli/2.28.3 Python/3.12.6 Linux/6.8.0 exe/x86_64.ubuntu.24": False,
+                 "aws-cli/2.26.6 Python/3.12.6 Linux/6.8.0 exe/x86_64.ubuntu.24": False,  # FilterExpression only
+                 "aws-cli/2.14.6 Python/3.11.6 Linux/6.8.0-31-generic source/x86_64.ubuntu.24": False,
+                 "aws-cli/1.33.0 Python/3.12.3 Linux/6.8.0 botocore/1.40.4": True,       # v1: its botocore decides
+                 "aws-cli/1.33.0 Python/3.12.3 Linux/6.8.0 botocore/1.40.3": False,
+                 "aws-cli/1.18.69 Python/3.8.10 Linux/5.4.0": False,                     # v1 that names no botocore
+                 "aws-cli/3.0.0 Python/3.16.0 Linux/7.0.0": True,
+                 "": False, "command not found": False}
+        self.assertEqual({v: aws.reads_budget_filters(v) for v in cases}, cases)
+        self.assertEqual(aws.cli_version("aws-cli/1.33.0 Python/3.12.3 Linux/6.8.0 botocore/1.40.3"),
+                         "1.33.0 (botocore 1.40.3)")
+
+    def test_a_cli_too_old_for_budget_filters_shows_no_budget_as_the_accounts(self):
+        old = "aws-cli/2.14.6 Python/3.11.6 Linux/6.8.0-31-generic source/x86_64.ubuntu.24"
+        self.fake(regions=account(), budgets=[BUDGET, SCOPED], version=old)
+        r = self.run_account(TOML)
+        d = r["details"]
+        self.assertEqual([b["scoped"] for b in d["budgets"]], [True, True])  # none can be shown to cover everything
+        self.assertIsNone(aws.account_budget(d["budgets"]))
+        self.assertFalse(any("budget" in a["msg"] for a in r.get("alerts") or []))
+        self.assertEqual(d["budget_note"], "aws CLI 2.14.6 too old for budget filters: needs 2.28.4+")
+        # A budgets read that fails reuses last run's rows: they are not confirmed either.
+        self.fake(regions=account(), version=old, fail=lambda s, c, reg: "\nthrottled\n" if s == "budgets" else None)
+        prev = dict(r, details=dict(d, budgets=[dict(b, scoped=False) for b in d["budgets"]]))
+        d2 = self.run_account(TOML, prev=prev)["details"]
+        self.assertEqual([b["scoped"] for b in d2["budgets"]], [True, True])
+        self.assertIn("budget_error", d2)
+        self.assertIn("budget_note", d2)
 
     def test_a_dedicated_host_without_an_instance_bills_and_alerts(self):
         regions = {"us-east-1": {"hosts": [{"id": "h-1", "fam": "mac2-m2", "ty": "mac2-m2.metal", "st": "available",
@@ -460,6 +494,7 @@ class ReadOnly(unittest.TestCase):
                                 ("budgets", "describe-budgets")})
         self.assertEqual(len(re.findall(r"(?<!def )\bcli\(ctx, ", src)), len(re.findall(r'\bcli\(ctx, \[\s*"', src)))
         self.assertEqual(src.count("ctx.run("), 1)  # inside cli(), the one way out
+        self.assertEqual(re.findall(r'\bcli\(ctx, \["(-[\w-]+)"', src), ["--version"])  # the one call that is no API call
         cost = self.read("aws_cost.py")
         self.assertEqual(re.findall(r'\["(ce)", "([\w-]+)"', cost), [("ce", "get-cost-and-usage")])
         self.assertEqual(re.findall(r"\bcli\(", cost), ["cli("])  # the one query, through aws.cli
@@ -773,6 +808,23 @@ class Panel(unittest.TestCase):
                         self.assertNotRegex(T.strip(ln), r"\w(…|\.\.\.)", "%s %d: %r" % (key, cw, T.strip(ln)))
                     for ln in p.render(cw, T.ACCENT):
                         self.assertLessEqual(T.width(ln), cw)
+
+    def test_a_cli_too_old_for_budget_filters_says_so_in_a_budget_row(self):
+        d = demo()
+        det = d["aws_account"]["details"]
+        det["budgets"] = [dict(b, scoped=True) for b in det["budgets"]]
+        det["budget_note"] = "aws CLI 2.14.6 too old for budget filters: needs 2.28.4+"
+        self.load(d)
+        for cw in (58, 90):
+            rows = self.text(cw=cw)
+            note = [r for r in rows if r.startswith("budget")]
+            self.assertEqual(len(note), 1, rows)
+            self.assertIn("2.14.6 too old", note[0])
+            self.assertFalse(any("of $400 budget" in r for r in rows))  # no budget row-mate claims the account's
+        d2 = demo()
+        d2["aws_account"]["details"]["budget_note"] = "stale"    # an account budget is shown: no note
+        self.load(d2)
+        self.assertFalse(any(r.startswith("budget") for r in self.text(cw=90)))
 
     def test_the_daily_row_counts_full_days_only(self):
         d = demo()
