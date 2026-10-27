@@ -67,6 +67,7 @@ git clone https://github.com/coletebou/porchlight ~/.local/share/porchlight
 | **SYSTEM** | CPU load, memory, swap and each disk as heat-gradient meters; procs, uptime, failed units; hung network mounts reported, never waited on |
 | **SERVICES** | systemd units (system and user, globs, merged groups like `runners 3/3`, restart counts), failed units, launchd jobs and Homebrew services, processes you watch |
 | **AGENTS** | Claude Code, Codex, Aider, Gemini, OpenCode, Goose, Cursor Agent, Amp, Copilot… running counts, orphaned agent and MCP processes, zombies, tmux, top memory |
+| **DROVER** | from a [Drover](https://github.com/coletebou/drover) daemon: agent sessions waiting on you and what they ask, what finished or crashed since your last visit, who works on which host, each daemon's commit and the credential pool |
 | **AI LIMITS** | Claude, Codex, Cursor and Grok plan windows (5 h / 7 d / per model) with reset times and credits, read-only |
 | **DOCKER** | compose stacks up/total, unhealthy, restarting, recent crashes (not clean exits or deliberate stops), expected containers missing |
 | **PULL REQUESTS** | yours and those awaiting your review on GitHub, GitLab, Gitea, Forgejo and Bitbucket Cloud: conflicts, approvals, changes requested, CI where available |
@@ -151,12 +152,12 @@ flags unknown settings, with "did you mean…?" suggestions.
 | **This machine** | process census and AI agents · Tailscale · repos · health routes · TLS certificates · backups · file budgets · deploy drift · MongoDB · weather (Open-Meteo, NWS, wttr.in) · quotes |
 | **AI plans** | Claude (Pro/Max) · Codex (ChatGPT plans) · Cursor · Grok |
 | **Cloud and SaaS** | Cloudflare · Vercel · UptimeRobot · Hetzner · GitHub CI · Sentry · Stripe · Resend · Langfuse · Anthropic, OpenAI, OpenRouter and xAI spend · AWS account · Twilio |
-| **Developer machines** | Docker/Podman compose stacks · AWS, GCP and Azure credentials · EC2 instances · GitHub, GitLab, Gitea, Forgejo and Bitbucket Cloud pull requests · VPN and endpoint reachability |
+| **Developer machines** | Docker/Podman compose stacks · AWS, GCP and Azure credentials · EC2 instances · GitHub, GitLab, Gitea, Forgejo and Bitbucket Cloud pull requests · VPN and endpoint reachability · Drover agent sessions |
 | **Yours** | `[[custom]]` commands (JSON, lines, Nagios plugins) · Python plugins |
 
 Reference: [host sources](docs/reference/core.md) · [AI plans](docs/reference/ai.md) ·
 [cloud and SaaS](docs/reference/saas.md) · [developer machines](docs/reference/dev.md) ·
-[custom commands and plugins](docs/plugins.md).
+[Drover](docs/reference/drover.md) · [custom commands and plugins](docs/plugins.md).
 
 `porchlight sources` lists every source and whether it runs on this machine
 (and if not, why: `needs targets`, `opt-in`, `no docker`, `not allowed`…).

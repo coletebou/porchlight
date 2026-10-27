@@ -27,7 +27,8 @@ written to the cache: tokens stay in memory, AWS keys are never read out of
 the credentials file, and error text is scrubbed before it is stored.
 
 The network panel already shows Tailscale, ssh tunnels and dev ports, so
-these panels do not repeat them.
+these panels do not repeat them. Agent sessions across machines, from a Drover
+daemon: [drover.md](drover.md).
 
 ---
 

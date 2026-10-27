@@ -8,7 +8,7 @@ from unittest import mock
 import support  # noqa: F401 — must be first: isolates cache/config
 from support import host, put
 
-from porchlight import alerts, collect, config, core, font, registry, render, secrets, theme as T
+from porchlight import alerts, collect, config, core, font, hosts, registry, render, secrets, theme as T
 from porchlight.sources import fleet, system  # noqa: F401
 
 
@@ -540,6 +540,10 @@ class Rendering(unittest.TestCase):
         finally:
             T.set_ascii(False)
             T.set_mode("truecolor")
+
+    def test_new_panels_take_their_place_in_the_auto_layout(self):
+        self.assertLess(hosts.AUTO_PANELS.index("agents"), hosts.AUTO_PANELS.index("drover"))
+        self.assertIn(" DROVER ", T.strip(render.render(self.h, self.cache, width=200)))
 
     def test_panels_see_the_previous_login(self):
         from porchlight.ui import BUILDERS

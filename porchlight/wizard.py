@@ -157,6 +157,9 @@ def generate() -> tuple:
             L += ["# [sources.%s]  # opt in to a read-only cloud account check" % source,
                   "# " + setting, ""]
             notes.append("%s: found; enable sources.%s to check its account" % (binary, source))
+    drover_state = core.expand(os.environ.get("DROVER_STATE") or "~/.local/state/drover")
+    if os.path.exists(os.path.join(drover_state, "daemon.json")):
+        notes.append("drover: a daemon is running here; the DROVER panel shows its sessions")
     if core.which("tailscale") or os.path.exists("/Applications/Tailscale.app"):
         L += ["[sources.tailscale]", "required = false   # true: alert when tailscaled is not running", ""]
         notes.append("tailscale: found")

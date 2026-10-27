@@ -17,6 +17,8 @@ branch = "main"
 [hosts."studio"]                 # the desktop: the hub
 fleet.peers = ["web-1", "db-1", "nas"]
 theme.accent = "porchlight"
+# DROVER needs no setting: each machine reads its own Drover daemon, and the hub
+# also reads every daemon's version and the credential pool.
 
 [hosts."web-*"]
 general.role = "server"

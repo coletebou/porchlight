@@ -44,6 +44,17 @@ CLIs may maintain or refresh their own login caches while making read-only API
 requests. Porchlight does not issue login, token-export or explicit refresh
 commands. GCP and Azure checks are opt-in.
 
+## Drover
+
+The Drover source reads the daemon's own token files and sends a token only in
+the `Authorization` header of a request to the daemon's URL from `daemon.json`;
+no token is stored. The two board operations go out with the read-only widget
+token whenever one exists, so nothing porchlight sends can message or steer a
+session; the main token is used only for two read operations on the fleet hub.
+Drover's text is masked by pattern (token shapes, credentials in URIs), never by
+matching secret values against it, which would reveal which secret equals a word
+on the screen ([drover.md](reference/drover.md#tokens-and-text)).
+
 ## AI subscription logins
 
 The AI plan-limit sources read the OAuth tokens that Claude Code, Codex,

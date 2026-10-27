@@ -105,8 +105,8 @@ attention_compact = 5
 ```
 
 `auto` shows every panel that has data, in this order: system, services,
-agents, docker, fleet, network, ai, prs, access, instances, health, edge,
-infra, comms, backups, files, money, repos, then your custom panels.
+agents, drover, docker, fleet, network, ai, prs, access, instances, health,
+edge, infra, comms, backups, files, money, repos, then your custom panels.
 
 ## [header] and [footer]
 
@@ -234,6 +234,14 @@ Every source takes `enabled`, `identities` and `hosts`, plus its own settings:
 - [Cloud and SaaS](reference/saas.md): cloudflare, vercel, uptimerobot, hetzner,
   github, sentry, stripe, resend, langfuse, ai_spend, aws_account, twilio
 - [Developer machines](reference/dev.md): docker, aws_auth, instances, prs, reach
+- [Drover](reference/drover.md): drover
+
+For example, the DROVER panel:
+
+```toml
+[sources.drover]
+versions = "hub"                # daemon versions and the credential pool: read on the fleet hub only
+```
 
 ## [[custom]]
 

@@ -14,6 +14,18 @@ All notable changes to this project are documented here. The format follows
 - A migration guide for fleet-motd configurations.
 - A swap column in the FLEET table, coloured by `swap_warn`/`swap_crit`; `-`
   for machines without swap.
+- A DROVER panel and `drover` source: the agent sessions a
+  [Drover](https://github.com/coletebou/drover) daemon sees on every host. Who
+  waits on you and what they ask (an alert names them), what finished or crashed
+  since your last visit (the source keeps the feed, with Drover's cursor), who
+  works where, and on the fleet hub each daemon's commit and the credential pool.
+  The board is read with Drover's read-only widget token whenever there is one;
+  Drover's text is masked by pattern only, never by matching secret values.
+- Panel helpers for plugins: `fitted()` (as many items as fit, then "+N"),
+  `wrap()` (words onto lines, a word cut only when it alone outgrows its line),
+  `theme.spark()`, and
+  `x.last_seen` (the previous login) on the render context. A source's `optin`
+  may be a callable that decides whether a machine opted in.
 
 ### Fixed
 - `git status` scans (the REPOS panel and the `repos` source) no longer take
