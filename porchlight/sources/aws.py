@@ -522,9 +522,11 @@ def _aws_account(ctx):
                               limit=PRICE_LOOKUPS if left() > 10 else 0)
     spot = spot_prices(ctx, prof, instances, workers, timeout=max(1.0, left() - 5)) if left() > 6 else {}
     burn, idle = costs(instances, vols, eips, hosts, prices, spot)
-    # Whether this CLI can read budget filters: last run's verdict until this run checks (None: never
-    # checked), so rows a run out of time reuses are trusted only as far as the run that made them.
-    berr, ver, filters = None, None, prev.get("budget_filters") if isinstance(prev.get("budget_filters"), bool) else None
+    # rows_ok: whether the rows were judged by a CLI that reads budget filters. Fresh rows take this
+    # run's check; rows reused (out of time, or the budgets read failed) keep the verdict of the run
+    # that made them, None for a record from before the check: trusted no further than that run.
+    berr, ver = None, None
+    rows_ok = prev.get("budget_filters") if isinstance(prev.get("budget_filters"), bool) else None
     try:
         if left() < 3:
             raise ProbeError("skipped: out of time")
@@ -532,11 +534,11 @@ def _aws_account(ctx):
             ver = cli(ctx, ["--version"], None, timeout=min(CLI_TIMEOUT, left()), raw=True)
         except ProbeError:
             ver = ""
-        filters = reads_budget_filters(ver)
-        brows = budgets(ctx, prof, acct, filters)
+        ok = reads_budget_filters(ver)
+        brows, rows_ok = budgets(ctx, prof, acct, ok), ok
     except ProbeError as e:
         brows, berr = [b for b in prev.get("budgets") or [] if isinstance(b, dict)], masked(e)
-    if filters is not True:  # last run's rows too: nothing confirms any of them
+    if rows_ok is not True:  # rows no capable CLI has judged: none of them is the account's
         brows = [dict(b, scoped=True) for b in brows]
     swept = {str(k): v for k, v in _d(st.get("swept")).items() if k in enabled}
     swept.update({r: int(now) for r in regs if not regs[r]["err"]})
@@ -561,10 +563,12 @@ def _aws_account(ctx):
         d["profile_errors"] = errs  # profiles tried before the one that answered
     if berr:
         d["budget_error"] = berr
-    if filters is not None:
-        d["budget_filters"] = filters
-    if brows and filters is False:  # this run's check, or last run's note when this run could not check
-        d["budget_note"] = budget_note(ver) if ver is not None else (_text(prev.get("budget_note"), 120) or budget_note(""))
+    if rows_ok is not None:
+        d["budget_filters"] = rows_ok
+    old = ver is not None and not reads_budget_filters(ver)  # this run's CLI cannot read them
+    note = budget_note(ver) if old else (_text(prev.get("budget_note"), 120) if ver is None and rows_ok is False else "")
+    if brows and note:  # this run's finding, or last run's when this run could not check
+        d["budget_note"] = note
     if perrs:
         d["price_errors"] = {k: masked(v) for k, v in sorted(perrs.items())[:4]}
     status, al = _verdict("aws", [], alerts(instances, vols, hosts, home, account_budget(brows), twice))

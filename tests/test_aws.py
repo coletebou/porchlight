@@ -326,6 +326,19 @@ class Inventory(Base):
         self.assertEqual([b["scoped"] for b in d["budgets"]], [True, True])
         self.assertEqual(d["budget_note"], "needs aws CLI 2.28.4+ for budget filters (has 2.14.6)")
 
+    def test_a_failed_budgets_read_never_certifies_rows_no_capable_cli_judged(self):
+        self.fake(regions=account(), budgets=[BUDGET, SCOPED])
+        r = self.run_account(TOML)
+        rows = [dict(b, scoped=False) for b in r["details"]["budgets"]]  # as an older classifier might have saved them
+        self.fake(regions=account(), fail=lambda s, c, reg: "\nthrottled\n" if s == "budgets" else None)  # a capable CLI
+        base = {k: v for k, v in r["details"].items() if k not in ("budget_note", "budget_filters")}
+        d = self.run_account(TOML, prev=dict(r, details=dict(base, budgets=rows)))["details"]
+        self.assertEqual([b["scoped"] for b in d["budgets"]], [True, True])   # the record had no verdict
+        self.assertNotIn("budget_filters", d)                                 # and this run gives it none
+        self.assertNotIn("budget_note", d)                                    # the CLI is fine: nothing to fix
+        d = self.run_account(TOML, prev=dict(r, details=dict(base, budgets=rows, budget_filters=True)))["details"]
+        self.assertEqual(([b["scoped"] for b in d["budgets"]], d["budget_filters"]), ([False, False], True))
+
     def test_a_dedicated_host_without_an_instance_bills_and_alerts(self):
         regions = {"us-east-1": {"hosts": [{"id": "h-1", "fam": "mac2-m2", "ty": "mac2-m2.metal", "st": "available",
                                              "at": "2026-10-25T04:00:00+00:00", "n": 0}]}}
