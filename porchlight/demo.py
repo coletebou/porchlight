@@ -56,6 +56,10 @@ targets = [{ repo = "~/code/webapp", file = "/srv/webapp/REVISION" }]
 [sources.gcp_auth]
 project = "example-dev"
 
+[sources.aws_account]
+home_regions = ["us-east-1"]
+cost_explorer = "daily"
+
 [sources.azure_auth]
 subscription = "Example development"
 
@@ -131,14 +135,20 @@ def _core_fixtures(now: float) -> dict:
 
 
 def _relative(v, now):
-    """Demo files write times as "+N"/"-N" seconds from now, so the sample data
-    never ages: resolve them at load."""
+    """Demo files write times as "+N"/"-N" seconds from now, days as "@day-N" (a UTC
+    date N days back) and "@month" (this month), so the sample data never ages:
+    resolve them at load."""
+    import time
     if isinstance(v, dict):
         return {k: _relative(x, now) for k, x in v.items()}
     if isinstance(v, list):
         return [_relative(x, now) for x in v]
     if isinstance(v, str) and len(v) > 1 and v[0] in "+-" and v[1:].isdigit():
         return now + int(v)
+    if isinstance(v, str) and v.startswith("@day") and v[4:5] in "+-" and v[5:].isdigit():
+        return time.strftime("%Y-%m-%d", time.gmtime(now + int(v[4:]) * 86400))
+    if v == "@month":
+        return time.strftime("%Y-%m", time.gmtime(now))
     return v
 
 

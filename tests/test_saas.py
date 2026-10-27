@@ -38,7 +38,7 @@ saas = _Either()
 NOW = float(calendar.timegm((2026, 10, 16, 12, 0, 0, 0, 0, 0)))
 CANARY = "CANARYSECRETVALUE0123456789abcdefXYZ"  # 36 chars: long enough for the token mask too
 SOURCES = ("cloudflare", "vercel", "uptimerobot", "hetzner", "github", "sentry", "stripe", "resend", "langfuse",
-           "ai_spend", "aws_account", "twilio")
+           "ai_spend", "twilio")  # the AWS account and its bill: tests/test_aws.py
 SAAS_PY = os.path.join(os.path.dirname(os.path.abspath(saas_core.__file__)), "saas.py")
 DEMO = os.path.join(support.ROOT, "porchlight", "data", "demo", "saas.json")
 
@@ -1152,101 +1152,6 @@ class AISpend(Base):
 
 
 # ── AWS ─────────────────────────────────────────────────────────────────────
-AWS_CFG = ("[default]\nregion = us-east-1\n\n[sso-session corp]\nsso_start_url = https://example.awsapps.com/start\nregion = eu-west-1\n\n"
-           "[profile admin]\nsso_session = corp\nsso_account_id = 123456789012\nregion = eu-central-1\n\n[profile lab]\n")
-SSO_EXPIRED = "\nError when retrieving token from sso: Token has expired and refresh failed\n"
-NO_CREDS = 'Unable to locate credentials. You can configure credentials by running "aws configure".\n'
-
-
-class AWS(Base):
-    def setUp(self):
-        fd, self.cfg = tempfile.mkstemp(suffix=".cfg")
-        os.write(fd, AWS_CFG.encode())
-        os.close(fd)
-        self.addCleanup(os.unlink, self.cfg)
-        self.env = {"AWS_CONFIG_FILE": self.cfg}
-        self.calls = []
-        p = mock.patch.object(saas_accounts, "_aws_bin", return_value="/fake/aws")
-        p.start()
-        self.addCleanup(p.stop)
-
-    def fake(self, ok=("admin",), accounts=None, ec2=None, ce="123.456"):
-        accounts = accounts or {}
-
-        def run(argv, timeout=None, env=None, **kw):
-            self.calls.append(argv)
-            self.assertEqual((env["AWS_EC2_METADATA_DISABLED"], env["AWS_PAGER"]), ("true", ""))
-            self.assertLessEqual(timeout, saas.CLI_TIMEOUT)
-            prof = argv[argv.index("--profile") + 1] if "--profile" in argv else None
-            region = argv[argv.index("--region") + 1] if "--region" in argv else None
-            if argv[1] == "sts":
-                if prof in ok:
-                    acct = accounts.get(prof, "123456789012")
-                    return 0, json.dumps({"Account": acct, "Arn": "arn:aws:sts::%s:assumed-role/Admin/someone@example.com" % acct}), ""
-                return 254, "", SSO_EXPIRED if prof == "admin" else NO_CREDS
-            if argv[1] == "ec2":
-                v = (ec2 or {}).get(region, [])
-                return (0, json.dumps(v), "") if v != "ERR" else (255, "", "An error occurred (UnauthorizedOperation)")
-            if argv[1] == "ce":
-                return 0, json.dumps({"ResultsByTime": [{"Total": {"UnblendedCost": {"Amount": ce}}}]}), ""
-            raise AssertionError(argv)
-        return run
-
-    def test_profiles_come_from_the_config_file_without_sso_sessions(self):
-        c = ctx(host(), {}, self.env)
-        self.assertEqual(saas._aws_profiles(c), [("default", "us-east-1"), ("admin", "eu-central-1"), ("lab", "")])
-        c = ctx(host(), {}, dict(self.env, AWS_PROFILE="lab"))
-        self.assertEqual([p for p, _r in saas._aws_profiles(c)], ["lab", "default", "admin"])
-        c = ctx(host(), {"profiles": ["admin"]}, self.env)
-        self.assertEqual(saas._aws_profiles(c), [("admin", "eu-central-1")])
-
-    def test_expired_sso_is_a_warning_carrying_the_fix(self):
-        res, _ = self.run_src("aws_account", self.env, {}, run=self.fake(ok=()))
-        self.assertEqual((res["status"], res["error"]), ("warn", "sso-expired"))
-        self.assertEqual(res["summary"], "SSO token expired: aws sso login --profile admin")
-        self.assertEqual(res["alerts"][0]["fix"], "aws sso login --profile admin")
-        self.assertEqual(res["details"]["profile_errors"], {"default": "no-credentials", "admin": "sso-expired", "lab": "no-credentials"})
-
-    def test_no_credentials_anywhere_is_unknown(self):
-        res, _ = self.run_src("aws_account", self.env, {}, "[sources.aws_account]\nprofiles = [\"lab\"]", run=self.fake(ok=()))
-        self.assertEqual((res["status"], res["error"]), ("unknown", "no-credentials"))
-        self.assertTrue(collect._soft_failure(res))
-
-    def test_success_counts_ec2_in_the_profile_region_hides_the_account_and_skips_cost_explorer(self):
-        ec2 = {"eu-central-1": [{"n": "a", "t": "m5.large"}, {"n": None, "t": "m5.large"}], "us-east-1": [{"n": "w", "t": "c5"}]}
-        res, _ = self.run_src("aws_account", self.env, {}, run=self.fake(ec2=ec2))
-        self.assertEqual((res["status"], res["summary"]), ("ok", "acct ...9012, 2 EC2 running"))
-        a = res["details"]["accounts"][0]
-        self.assertEqual((a["profile"], a["account_last4"], a["principal_type"]), ("admin", "9012", "assumed-role"))
-        self.assertEqual(a["ec2_running"], {"eu-central-1": {"count": 2, "names": ["a"]}})  # the profile's own region only
-        text = json.dumps(res)
-        self.assertNotIn("123456789012", text)
-        self.assertNotIn("someone@example.com", text)  # the role session name is not copied
-        self.assertFalse(any(c[1] == "ce" for c in self.calls), "Cost Explorer bills per call: opt-in only")
-
-    def test_regions_cost_explorer_opt_in_and_partial_ec2(self):
-        toml = '[sources.aws_account]\nregions = ["us-east-1", "us-west-2"]\ncost_explorer = true'
-        res, _ = self.run_src("aws_account", self.env, {}, toml, run=self.fake(ec2={"us-east-1": [{"n": "a"}], "us-west-2": "ERR"}))
-        a = res["details"]["accounts"][0]
-        self.assertEqual(a["mtd_unblended_usd"], 123.46)
-        self.assertEqual(sum(1 for c in self.calls if c[1] == "ce"), 1)
-        self.assertEqual((res["status"], a["ec2_running"]["us-west-2"]), ("warn", {"error": "access-denied"}))
-        ce = [c for c in self.calls if c[1] == "ce"][0]
-        self.assertEqual(ce[ce.index("--time-period") + 1], "Start=2026-10-01,End=2026-10-17")
-
-    def test_two_profiles_into_one_account_count_once(self):
-        res, _ = self.run_src("aws_account", self.env, {}, run=self.fake(ok=("default", "admin"), ec2={"us-east-1": [{"n": "x"}]}))
-        self.assertEqual(len(res["details"]["accounts"]), 1)
-        res, _ = self.run_src("aws_account", self.env, {}, run=self.fake(ok=("default", "admin"), accounts={"admin": "210987654321"}))
-        self.assertEqual(res["summary"], "2 accounts, 0 EC2 running")
-
-    def test_cli_missing(self):
-        with mock.patch.object(saas_accounts, "_aws_bin", return_value=None):
-            res, _ = self.run_src("aws_account", self.env, {}, run=self.fake())
-        self.assertEqual((res["status"], res["summary"]), ("unknown", "aws CLI not installed"))
-        self.assertEqual(self.calls, [])
-
-
 # ── Twilio ──────────────────────────────────────────────────────────────────
 SID = "AC" + "0123456789abcdef" * 2
 TW = "https://api.twilio.com/2010-04-01/Accounts/" + SID
@@ -1328,10 +1233,8 @@ class GuardRails(unittest.TestCase):
         self.assertIsNone(re.search(r"^\s*(?:import|from)\s+(?:subprocess|socket|http\.client|urllib\.request|requests)\b", src, re.M))
         for banned in ("core.http(", "urlopen(", "os.system(", "os.popen(", "Popen(", "core.run("):
             self.assertNotIn(banned, src)
-        self.assertEqual(len(re.findall(r"ctx\.run\(", src)), 2)  # gh auth token, and _aws
+        self.assertEqual(len(re.findall(r"ctx\.run\(", src)), 1)  # gh auth token (the AWS CLI: tests/test_aws.py)
         self.assertIn('ctx.run([gh, "auth", "token", "--hostname", "github.com"]', src)
-        aws = set(re.findall(r'_aws\(ctx, \["(\w+)", "([\w-]+)"', src))
-        self.assertEqual(aws, {("sts", "get-caller-identity"), ("ec2", "describe-instances"), ("ce", "get-cost-and-usage")})
 
     def test_every_source_is_registered_global_and_documented(self):
         with open(os.path.join(support.ROOT, "docs", "reference", "saas.md"), encoding="utf-8") as f:
@@ -1348,8 +1251,7 @@ class GuardRails(unittest.TestCase):
         """Every source against one fake answer for every URL; none may raise or leak."""
         out = {}
         h = host(FUZZ_TOML)
-        with mock.patch.object(saas_core, "_gh_cli_token", return_value=None), mock.patch.object(saas_accounts, "_aws_bin", return_value="/fake/aws"), \
-                mock.patch.object(saas_core, "_now", lambda: NOW):
+        with mock.patch.object(saas_core, "_gh_cli_token", return_value=None), mock.patch.object(saas_core, "_now", lambda: NOW):
             for name in SOURCES:
                 c = ctx(h, registry.SOURCES[name].config(h), FUZZ_ENV, None, fake)
                 c.run = lambda *a, **k: run_out
@@ -1395,8 +1297,7 @@ class GuardRails(unittest.TestCase):
         def fake(url, method="GET", **kw):
             raise TimeoutError("timed out")
         for name, res in self.fuzz(fake).items():
-            if name not in ("aws_account",):
-                self.assertIn(res["status"], ("unknown", "crit"), name)  # langfuse unreachable is crit; the rest soft-fail
+            self.assertIn(res["status"], ("unknown", "crit"), name)  # langfuse unreachable is crit; the rest soft-fail
 
     def test_the_collector_keeps_the_last_good_reading_through_a_soft_failure(self):
         h = host()
@@ -1504,14 +1405,13 @@ class Panels(unittest.TestCase):
         for needle in ("11/12 monitors up", "1 paused", "3/3 up", "2 retired", "48k req", "61 5xx (0.1%)", "4 ready", "1 building",
                        "www 142", "docs HTTP 503"):
             self.assertIn(needle, edge)
-        for needle in ("web-1 cpx31", "backups", "62%", "api", "5 open PRs by octocat", "1 changes requested", "3 unresolved",
-                       "prod", "4821", "3 EC2 running"):
+        for needle in ("web-1 cpx31", "backups", "62%", "api", "5 open PRs by octocat", "1 changes requested", "3 unresolved"):
             self.assertIn(needle, infra)
         for needle in ("2/2 domains verified", "41 emails 24h", "routing 1/2 ready", "14 delivered", "example.org misconfigured",
                        "12 SMS today"):
             self.assertIn(needle, comms)
         for needle in ("$1.3k available", "42 active", "MRR $1.6k", "anthropic $38.20", "openai $12.75", "= $50.95", "$7.40 left",
-                       "BillingRead", "~$61.37/mo", "$212 month to date", "$81.49 on-demand this cycle", "$63.80 balance"):
+                       "BillingRead", "~$61.37/mo", "$81.49 on-demand this cycle", "$63.80 balance"):
             self.assertIn(needle, money)
         self.assertEqual([self.build(k).level for k in PANELS], ["crit", "warn", "warn", "warn"])  # docs is down: crit
 
@@ -1579,14 +1479,10 @@ class Demo(Base):
     def live(self):
         """Each source's real output from the fixtures above: the shapes the demo copies."""
         self.calls = []
-        fd, cfg = tempfile.mkstemp()
-        os.write(fd, AWS_CFG.encode())
-        os.close(fd)
-        self.addCleanup(os.unlink, cfg)
         ai = or_routes()
         ai.update(xai_routes())
         ai.update({("GET", AN): an_page(15, "391"), ("GET", OA): oa_page(15, 6.18)})
-        with mock.patch.object(saas_core, "_gh_cli_token", return_value=None), mock.patch.object(saas_accounts, "_aws_bin", return_value="/fake/aws"):
+        with mock.patch.object(saas_core, "_gh_cli_token", return_value=None):
             return {
                 "cloudflare": self.run_src("cloudflare", CF_KEY_ENV, cf_routes())[0],
                 "vercel": self.run_src("vercel", {"VERCEL_TOKEN": CANARY}, {("GET", VP): (200, {"projects": [vproj("a", "READY", hours=1)]})})[0],
@@ -1599,8 +1495,6 @@ class Demo(Base):
                                                                            (200, {"data": [email("delivered", hours=1)]})))[0],
                 "langfuse": self.run_src("langfuse", dict(LF_ENV, LANGFUSE_BASE_URL=""), lf_routes(), LF_TWO)[0],
                 "ai_spend": self.run_src("ai_spend", AI_ENV, ai)[0],
-                "aws_account": self.run_src("aws_account", {"AWS_CONFIG_FILE": cfg}, {}, "[sources.aws_account]\ncost_explorer = true",
-                                            run=AWS.fake(self, ec2={"eu-central-1": [{"n": "a"}]}))[0],
                 "twilio": self.run_src("twilio", Twilio.ENV, Twilio.routes(self))[0],
             }
 
@@ -1610,7 +1504,7 @@ class Demo(Base):
         nested = {"cloudflare": ("tunnels", "traffic_24h", "zones", "email_routing"), "stripe": ("subscriptions",),
                   "resend": ("emails_24h",), "twilio": ("balance",), "ai_spend": ("openrouter", "anthropic", "openai", "xai")}
         rows = {"cloudflare": ("traffic_zones",), "hetzner": ("servers", "storage_boxes"), "github": ("repos",), "langfuse": ("projects",),
-                "aws_account": ("accounts",), "resend": ("domains",)}
+                "resend": ("domains",)}
         for name in SOURCES:
             rec, real = d[name], live[name]
             assert_shape(self, rec)

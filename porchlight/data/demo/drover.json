@@ -1,0 +1,52 @@
+{
+  "_comment": "The Drover daemon on atlas, the hub, sees agent sessions on atlas, gpu-box and web-1 (fictional). Times written as \"+N\" / \"-N\" are seconds from the moment the demo loads.",
+  "drover": {
+    "daemon": "up",
+    "here": "atlas",
+    "waiting": [
+      {"name": "demo-review", "host": "local", "engine": "claude", "kind": "question", "since": "-420",
+       "ask": "Push the branch now, or wait for the second review?"},
+      {"name": "demo-migrate", "host": "gpu-box", "engine": "codex", "kind": "decision", "since": "-95",
+       "ask": "Run the migration on the staging database? 1. Yes / 2. Yes, and do not ask again / 3. No"}
+    ],
+    "working": [
+      {"name": "demo-tests", "host": "local", "engine": "codex"},
+      {"name": "demo-api", "host": "local", "engine": "claude"},
+      {"name": "#5ffd86aa", "host": "local", "engine": "claude"},
+      {"name": "demo-train", "host": "gpu-box", "engine": "claude"},
+      {"name": "demo-lint", "host": "web-1", "engine": "claude"}
+    ],
+    "hosts": [
+      {"name": "local", "up": true, "waiting": 1, "working": 3, "idle": 2},
+      {"name": "gpu-box", "up": true, "waiting": 1, "working": 1, "idle": 1},
+      {"name": "web-1", "up": true, "waiting": 0, "working": 1, "idle": 1}
+    ],
+    "totals": {"waiting": 2, "working": 5, "idle": 4, "hosts": 3},
+    "manager": {"up": true},
+    "feed": [
+      {"at": "-720", "kind": "finished", "host": "web-1", "name": "demo-docs", "what": "finished",
+       "text": "Done: the README section is written and all 12 tests pass.", "sid": "s-demo-docs"},
+      {"at": "-2400", "kind": "finished", "host": "local", "name": "demo-build", "what": "finished",
+       "text": "Pushed 3 commits to origin/main; CI is green.", "sid": "s-demo-build"},
+      {"at": "-5400", "kind": "error", "host": "gpu-box", "name": "demo-bench", "what": "exited unexpectedly", "text": "",
+       "sid": "s-demo-bench"},
+      {"at": "-19800", "kind": "finished", "host": "local", "name": "demo-refactor", "what": "finished",
+       "text": "Split the parser into two modules; no behaviour change.", "sid": "s-demo-refactor"}
+    ],
+    "feed_cursor": "c1.demo",
+    "details": {
+      "at": "-300",
+      "versions": [
+        {"host": "local", "ok": true, "state": "live", "loaded": "4f2a9c1", "checkout": "4f2a9c1"},
+        {"host": "gpu-box", "ok": true, "state": "restart", "loaded": "9b1e0d7", "checkout": "4f2a9c1"},
+        {"host": "web-1", "ok": true, "state": "live", "loaded": "4f2a9c1", "checkout": "4f2a9c1"}
+      ],
+      "pool": [
+        {"id": "main", "available": true, "active": 3, "max": 12, "throttles": 0, "missing": []},
+        {"id": "backup", "available": false, "active": 0, "max": 12, "throttles": 0, "missing": ["BACKUP_API_TOKEN"]}
+      ],
+      "pick": "main"
+    },
+    "alerts": [{"sev": "warn", "msg": "2 agents waiting on you (demo-review@atlas, demo-migrate@gpu-box)"}]
+  }
+}

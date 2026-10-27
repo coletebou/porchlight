@@ -1,6 +1,6 @@
 """The public plugin API (re-exported lazily by `porchlight`).
 
-    from porchlight import source, panel, Panel, kv, cells, SEP, theme, core
+    from porchlight import source, panel, Panel, kv, cells, fitted, wrap, SEP, theme, core
 
     @source("todo", ttl=300, desc="Open items in my todo file")
     def todo(ctx):
@@ -15,4 +15,4 @@
 """
 from . import core, theme  # noqa: F401
 from .registry import EVERYONE, source  # noqa: F401
-from .ui import SEP, Panel, cells, kv, panel  # noqa: F401
+from .ui import SEP, Panel, cells, fitted, kv, panel, wrap  # noqa: F401

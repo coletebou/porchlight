@@ -27,7 +27,9 @@ written to the cache: tokens stay in memory, AWS keys are never read out of
 the credentials file, and error text is scrubbed before it is stored.
 
 The network panel already shows Tailscale, ssh tunnels and dev ports, so
-these panels do not repeat them.
+these panels do not repeat them. The whole AWS account (every enabled region at
+list price, budgets and the bill) is the AWS panel's: [aws.md](aws.md). Agent
+sessions across machines, from a Drover daemon: [drover.md](drover.md).
 
 ---
 
@@ -214,7 +216,9 @@ expired.
 Your EC2 instances from `aws ec2 describe-instances` (terminated ones left
 out), running first: name (the `Name` tag, else the id), type, private IP,
 and uptime since the last start. Stopped instances are summarized on one line
-with a command that starts them.
+with a command that starts them. This is the view of the machine you work on:
+one region, its own credentials, your filters. What the account runs everywhere,
+and what it costs, is `aws_account`'s ([aws.md](aws.md)).
 
 ```toml
 [sources.instances]

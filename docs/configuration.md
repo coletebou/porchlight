@@ -105,8 +105,8 @@ attention_compact = 5
 ```
 
 `auto` shows every panel that has data, in this order: system, services,
-agents, docker, fleet, network, ai, prs, access, instances, health, edge,
-infra, comms, backups, files, money, repos, then your custom panels.
+agents, drover, docker, fleet, network, ai, prs, access, instances, health,
+edge, infra, aws, comms, backups, files, money, repos, then your custom panels.
 
 ## [header] and [footer]
 
@@ -232,8 +232,22 @@ Every source takes `enabled`, `identities` and `hosts`, plus its own settings:
   sites, health, certs, backups, files, drift, mongodb
 - [AI plan limits](reference/ai.md): claude_usage, codex_usage, cursor_usage, grok_usage
 - [Cloud and SaaS](reference/saas.md): cloudflare, vercel, uptimerobot, hetzner,
-  github, sentry, stripe, resend, langfuse, ai_spend, aws_account, twilio
+  github, sentry, stripe, resend, langfuse, ai_spend, twilio
+- [The AWS account and its bill](reference/aws.md): aws_account, aws_cost
 - [Developer machines](reference/dev.md): docker, aws_auth, instances, prs, reach
+- [Drover](reference/drover.md): drover
+
+For example, the AWS panel and the DROVER panel:
+
+```toml
+[sources.aws_account]
+profile = "readonly"            # the one profile the AWS panel reads with
+home_regions = ["us-east-1"]    # read every run; the account's other regions are swept a few per run
+cost_explorer = "daily"         # one $0.01 Cost Explorer request a day; "off" (the default) makes none
+
+[sources.drover]
+versions = "hub"                # daemon versions and the credential pool: read on the fleet hub only
+```
 
 ## [[custom]]
 

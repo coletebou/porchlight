@@ -147,21 +147,6 @@
     "error": null,
     "alerts": [{"sev": "warn", "msg": "ai spend: OpenRouter $7.40 left of $50"}]
   },
-  "aws_account": {
-    "status": "ok",
-    "summary": "2 accounts, 4 EC2 running",
-    "details": {
-      "accounts": [
-        {"profile": "prod", "account_last4": "4821", "principal_type": "assumed-role",
-         "ec2_running": {"us-east-1": {"count": 3, "names": ["api-1", "api-2", "worker-1"]}}, "mtd_unblended_usd": 212.34},
-        {"profile": "dev", "account_last4": "7730", "principal_type": "assumed-role",
-         "ec2_running": {"us-west-2": {"count": 1, "names": ["sandbox"]}}}
-      ],
-      "profiles": 3,
-      "profile_errors": {"legacy": "no-credentials"}
-    },
-    "error": null
-  },
   "twilio": {
     "status": "ok",
     "summary": "$63.80 balance, 12 SMS today",

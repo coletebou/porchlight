@@ -1,0 +1,67 @@
+{
+  "_comment": "One AWS account (profile prod) at list prices, and its Cost Explorer days (fictional). Times written as \"+N\" / \"-N\" are seconds from the moment the demo loads; \"@day-N\" is the UTC date N days back, \"@month\" this month.",
+  "aws_account": {
+    "status": "warn",
+    "summary": "4/6 EC2 running · $0.48/h",
+    "details": {
+      "profile": "prod", "account_last4": "4821", "principal_type": "assumed-role",
+      "instances": [
+        {"id": "i-0aa11bb22cc33dd44", "name": "api-1", "type": "m7i.large", "state": "running", "region": "us-east-1",
+         "az": "us-east-1a", "spot": false, "platform": "Linux/UNIX", "tenancy": "default", "since": "-1814400",
+         "disk_usd_mo": 2.4, "usd_h": 0.1008, "price": "od"},
+        {"id": "i-0aa11bb22cc33dd45", "name": "api-2", "type": "m7i.large", "state": "running", "region": "us-east-1",
+         "az": "us-east-1b", "spot": false, "platform": "Linux/UNIX", "tenancy": "default", "since": "-1814400",
+         "disk_usd_mo": 2.4, "usd_h": 0.1008, "price": "od"},
+        {"id": "i-0aa11bb22cc33dd46", "name": "build-eu", "type": "t3.large", "state": "running", "region": "eu-west-1",
+         "az": "eu-west-1a", "spot": false, "platform": "Linux/UNIX", "tenancy": "default", "since": "-9000",
+         "disk_usd_mo": 8.8, "usd_h": 0.0912, "price": "od"},
+        {"id": "i-0aa11bb22cc33dd47", "name": "worker-1", "type": "c7i.xlarge", "state": "running", "region": "us-east-1",
+         "az": "us-east-1c", "spot": true, "platform": "Linux/UNIX", "tenancy": "default", "since": "-259200",
+         "disk_usd_mo": 4.0, "usd_h": 0.0712, "price": "spot"},
+        {"id": "i-0aa11bb22cc33dd48", "name": "batch-1", "type": "r7i.2xlarge", "state": "stopped", "region": "us-east-1",
+         "az": "us-east-1a", "spot": false, "platform": "Linux/UNIX", "tenancy": "default", "since": "-432000",
+         "disk_usd_mo": 40.0, "usd_h": null},
+        {"id": "i-0aa11bb22cc33dd49", "name": "sandbox", "type": "t3.medium", "state": "stopped", "region": "us-east-1",
+         "az": "us-east-1b", "spot": false, "platform": "Linux/UNIX", "tenancy": "default", "since": "-2592000",
+         "disk_usd_mo": 10.0, "usd_h": null}
+      ],
+      "hosts": [],
+      "volumes": {"count": 6, "gb": 810, "loose": 0},
+      "burn": {"compute_h": 0.364, "disk_h": 0.0926, "ipv4_h": 0.02, "host_h": 0.0, "total_h": 0.4766, "ipv4": 4, "unpriced": []},
+      "idle": {"usd_mo": 53.65, "items": [{"name": "batch-1", "usd_mo": 40.0}, {"name": "sandbox", "usd_mo": 13.65}]},
+      "budgets": [
+        {"name": "monthly-total", "unit": "MONTHLY", "limit": 400.0, "actual": 287.66, "forecast": 331.2, "updated": "-7200",
+         "scoped": false},
+        {"name": "experiments", "unit": "MONTHLY", "limit": 50.0, "actual": 12.4, "forecast": null, "updated": "-7200",
+         "scoped": true}
+      ],
+      "regions": {
+        "home": ["us-east-1"],
+        "enabled": ["ap-northeast-1", "ap-southeast-2", "eu-central-1", "eu-west-1", "us-east-1", "us-east-2", "us-west-1",
+                    "us-west-2"],
+        "at": "-40000", "active": ["eu-west-1"], "cursor": 3,
+        "swept": {"us-east-1": "-600", "eu-west-1": "-600", "us-east-2": "-600", "us-west-1": "-600",
+                  "ap-northeast-1": "-4200", "ap-southeast-2": "-4200"},
+        "errors": {}
+      },
+      "prices": {
+        "od|us-east-1|m7i.large|Linux/UNIX|Shared": {"usd_h": 0.1008, "at": "-86400"},
+        "od|eu-west-1|t3.large|Linux/UNIX|Shared": {"usd_h": 0.0912, "at": "-86400"},
+        "ebs|us-east-1|gp3": {"gb_mo": 0.08, "iops_mo": 0.005, "mibps_mo": 0.04, "at": "-86400"},
+        "ebs|us-east-1|gp2": {"gb_mo": 0.1, "at": "-86400"},
+        "ebs|eu-west-1|gp3": {"gb_mo": 0.088, "iops_mo": 0.0055, "mibps_mo": 0.044, "at": "-86400"}
+      }
+    },
+    "error": null,
+    "alerts": [{"sev": "warn", "msg": "aws: 1 instance, 1 volume in eu-west-1, outside the home regions"}]
+  },
+  "aws_cost": {
+    "month": "@month", "start": "@day-13", "through": "@day+0", "estimated": true, "mtd": 287.66,
+    "days": [["@day-14", 10.42], ["@day-13", 11.08], ["@day-12", 7.95], ["@day-11", 6.61], ["@day-10", 10.2],
+             ["@day-9", 11.87], ["@day-8", 12.34], ["@day-7", 11.9], ["@day-6", 9.02], ["@day-5", 6.76],
+             ["@day-4", 7.45], ["@day-3", 11.21], ["@day-2", 12.98], ["@day-1", 11.37], ["@day+0", 3.12]],
+    "services": [["EC2", 205.1], ["EC2-Other", 58.21], ["VPC", 15.62], ["S3", 5.4], ["CloudWatch", 2.11], ["KMS", 1.22]],
+    "per_day": {"ec2": 7.89, "ec2_other": 2.24, "other": 0.34, "vpc": 0.6}, "partial": false,
+    "tried_at": "-20000", "as_of": "-20000", "profile": "prod"
+  }
+}

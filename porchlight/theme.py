@@ -373,13 +373,13 @@ _GLYPHS = {
     "dot": "●", "hollow": "○", "stale": "◌", "crit": "✖", "warn": "▲", "info": "·", "ok": "✔",
     "work": "▶", "wait": "⏸", "up": "↑", "down": "↓", "reset": "↻", "via": "⇄", "bullet": "◆",
     "rule": "─", "bar": "━", "bar_half": "╸", "bar_empty": "─", "bar_edge": "▌", "sep": "·",
-    "quote_l": "❝", "quote_r": "❞",
+    "quote_l": "❝", "quote_r": "❞", "approx": "≈",
 }
 _ASCII_GLYPHS = {
     "dot": "*", "hollow": "o", "stale": ".", "crit": "x", "warn": "!", "info": "-", "ok": "+",
     "work": ">", "wait": "=", "up": "^", "down": "v", "reset": "@", "via": "~", "bullet": "*",
     "rule": "-", "bar": "#", "bar_half": "+", "bar_empty": ".", "bar_edge": "|", "sep": "|",
-    "quote_l": '"', "quote_r": '"',
+    "quote_l": '"', "quote_r": '"', "approx": "~",
 }
 
 
@@ -387,7 +387,8 @@ _ASCII_GLYPHS = {
 _ASCII_MAP = {"·": ".", "•": "*", "—": "-", "–": "-", "→": ">", "←": "<", "↑": "^", "↓": "v", "↻": "@", "⇄": "~",
               "…": ".", "°": "o", "✔": "+", "✖": "x", "▲": "!", "●": "*", "○": "o", "◌": ".", "◆": "*", "▌": "|",
               "━": "#", "╸": "+", "─": "-", "❝": '"', "❞": '"', "▶": ">", "⏸": "=", "×": "x", "≠": "!",
-              "“": '"', "”": '"', "‘": "'", "’": "'", "█": "#", "▀": "^", "▄": "_", "µ": "u"}
+              "“": '"', "”": '"', "‘": "'", "’": "'", "█": "#", "▀": "^", "▄": "_", "µ": "u", "≈": "~",
+              "▁": "_", "▂": ".", "▃": ":", "▅": "=", "▆": "+", "▇": "*"}
 
 
 def asciify(text: str) -> str:
@@ -459,3 +460,18 @@ def rule(w: int, color: str = "faint", ch=None) -> str:
 
 def sep() -> str:
     return dim(" %s " % g("sep"))
+
+
+_SPARK = "▁▂▃▄▅▆▇█"
+_SPARK_ASCII = "_.:-=+*#"
+
+
+def spark(values) -> str:
+    """One cell per value, scaled to the largest. Zero is the floor; anything above it
+    gets at least the second step, so a small day never reads as nothing."""
+    steps = _SPARK_ASCII if ASCII else _SPARK
+    vals = [max(0.0, float(v or 0)) for v in values]
+    top = max(vals, default=0.0)
+    if top <= 0:
+        return steps[0] * len(vals)
+    return "".join(steps[0] if v <= 0 else steps[1 + min(6, int(v / top * 6.999))] for v in vals)

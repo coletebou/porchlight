@@ -415,7 +415,7 @@ def render(host, cache, width=None, only=None, login=False, compact=None) -> str
     last_seen = visit(host, login, al)
     compact = compact_mode(host, W, only) if compact is None else compact
     _, cw = layout(W, host.cfg)
-    ctx = RCtx(host, cache, lv, al, cw)
+    ctx = RCtx(host, cache, lv, al, cw, last_seen)
     keys = only or host.panels
     if not only:
         extra = panels.custom_keys(host)

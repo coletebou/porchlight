@@ -12,7 +12,7 @@ backups, certificates and costs, ranked into one attention list, rendered from c
 <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
 </p>
 
-<p align="center"><img src="docs/img/demo.svg" alt="porchlight on a hub machine: banner, attention strip and panels for system, services, agents, fleet, AI limits, docker, pull requests, edge, infra and money"></p>
+<p align="center"><img src="docs/img/demo.svg" alt="porchlight on a hub machine: banner, attention strip and panels for system, services, agents, Drover sessions, fleet, AI limits, docker, pull requests, edge, infra, AWS and money"></p>
 
 ---
 
@@ -67,6 +67,7 @@ git clone https://github.com/coletebou/porchlight ~/.local/share/porchlight
 | **SYSTEM** | CPU load, memory, swap and each disk as heat-gradient meters; procs, uptime, failed units; hung network mounts reported, never waited on |
 | **SERVICES** | systemd units (system and user, globs, merged groups like `runners 3/3`, restart counts), failed units, launchd jobs and Homebrew services, processes you watch |
 | **AGENTS** | Claude Code, Codex, Aider, Gemini, OpenCode, Goose, Cursor Agent, Amp, Copilot… running counts, orphaned agent and MCP processes, zombies, tmux, top memory |
+| **DROVER** | from a [Drover](https://github.com/coletebou/drover) daemon: agent sessions waiting on you and what they ask, what finished or crashed since your last visit, who works on which host, each daemon's commit and the credential pool |
 | **AI LIMITS** | Claude, Codex, Cursor and Grok plan windows (5 h / 7 d / per model) with reset times and credits, read-only |
 | **DOCKER** | compose stacks up/total, unhealthy, restarting, recent crashes (not clean exits or deliberate stops), expected containers missing |
 | **PULL REQUESTS** | yours and those awaiting your review on GitHub, GitLab, Gitea, Forgejo and Bitbucket Cloud: conflicts, approvals, changes requested, CI where available |
@@ -76,11 +77,12 @@ git clone https://github.com/coletebou/porchlight ~/.local/share/porchlight
 | **INSTANCES** | your EC2 instances, with start hints for stopped ones |
 | **HEALTH** | your own health routes (two-strike flap guard), MongoDB, deploy drift (deployed SHA vs `origin/main`) |
 | **EDGE** | public sites with latency, UptimeRobot, Cloudflare tunnels, traffic and 5xx rate, Vercel deploys |
-| **INFRA** | Hetzner servers and storage boxes, GitHub CI per repo, Sentry, AWS account |
+| **INFRA** | Hetzner servers and storage boxes, GitHub CI per repo, Sentry |
+| **AWS** | the month against the budget with a forecast, a 14-day spark, the burn per hour, spend by service, every running instance at list price in every enabled region, what stopped boxes still cost |
 | **COMMS** | Resend domains and bounces, Cloudflare email routing, Twilio |
 | **BACKUPS** | systemd backup jobs judged by the service's result, not its timer; files that must stay fresh; TLS expiry |
 | **FILES** | size budgets for files that break when they grow (`CLAUDE.md`, `AGENTS.md`, memory indexes) |
-| **MONEY** | Stripe balance and MRR, API spend month to date (Anthropic, OpenAI, OpenRouter, xAI), run-rates |
+| **MONEY** | Stripe balance and MRR, API spend month to date (Anthropic, OpenAI, OpenRouter, xAI), the AWS month, run-rates |
 | **REPOS** | branch, dirty, ahead/behind, untracked, last commit |
 | **footer** | a quote, a question of the day, and how long the render took |
 
@@ -150,12 +152,13 @@ flags unknown settings, with "did you mean…?" suggestions.
 |---|---|
 | **This machine** | process census and AI agents · Tailscale · repos · health routes · TLS certificates · backups · file budgets · deploy drift · MongoDB · weather (Open-Meteo, NWS, wttr.in) · quotes |
 | **AI plans** | Claude (Pro/Max) · Codex (ChatGPT plans) · Cursor · Grok |
-| **Cloud and SaaS** | Cloudflare · Vercel · UptimeRobot · Hetzner · GitHub CI · Sentry · Stripe · Resend · Langfuse · Anthropic, OpenAI, OpenRouter and xAI spend · AWS account · Twilio |
-| **Developer machines** | Docker/Podman compose stacks · AWS, GCP and Azure credentials · EC2 instances · GitHub, GitLab, Gitea, Forgejo and Bitbucket Cloud pull requests · VPN and endpoint reachability |
+| **Cloud and SaaS** | Cloudflare · Vercel · UptimeRobot · Hetzner · GitHub CI · Sentry · Stripe · Resend · Langfuse · Anthropic, OpenAI, OpenRouter and xAI spend · AWS account at list price, budgets and Cost Explorer (one request a day, opt-in) · Twilio |
+| **Developer machines** | Docker/Podman compose stacks · AWS, GCP and Azure credentials · EC2 instances · GitHub, GitLab, Gitea, Forgejo and Bitbucket Cloud pull requests · VPN and endpoint reachability · Drover agent sessions |
 | **Yours** | `[[custom]]` commands (JSON, lines, Nagios plugins) · Python plugins |
 
 Reference: [host sources](docs/reference/core.md) · [AI plans](docs/reference/ai.md) ·
-[cloud and SaaS](docs/reference/saas.md) · [developer machines](docs/reference/dev.md) ·
+[cloud and SaaS](docs/reference/saas.md) · [AWS](docs/reference/aws.md) ·
+[developer machines](docs/reference/dev.md) · [Drover](docs/reference/drover.md) ·
 [custom commands and plugins](docs/plugins.md).
 
 `porchlight sources` lists every source and whether it runs on this machine

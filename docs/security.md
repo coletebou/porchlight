@@ -44,6 +44,26 @@ CLIs may maintain or refresh their own login caches while making read-only API
 requests. Porchlight does not issue login, token-export or explicit refresh
 commands. GCP and Azure checks are opt-in.
 
+The AWS account source runs only describe and list commands, a fixed set that a
+test audits ([aws.md](reference/aws.md#commands)); the CLI sees the `AWS_*`
+settings and no other secret. Cost Explorer, the one AWS API porchlight can call
+that bills ($0.01 a request), is off by default and, when on, makes at most one
+request a day: the cap is enforced in the source against the last attempt, which
+is noted before the request goes out, with the CLI's retries and pagination
+turned off; in a fleet only the hub asks. Account ids in stored profile names and
+AWS errors are cut to their last four digits.
+
+## Drover
+
+The Drover source reads the daemon's own token files and sends a token only in
+the `Authorization` header of a request to the daemon's URL from `daemon.json`;
+no token is stored. The two board operations go out with the read-only widget
+token whenever one exists, so nothing porchlight sends can message or steer a
+session; the main token is used only for two read operations on the fleet hub.
+Drover's text is masked by pattern (token shapes, credentials in URIs), never by
+matching secret values against it, which would reveal which secret equals a word
+on the screen ([drover.md](reference/drover.md#tokens-and-text)).
+
 ## AI subscription logins
 
 The AI plan-limit sources read the OAuth tokens that Claude Code, Codex,

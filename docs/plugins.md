@@ -117,7 +117,7 @@ JSON-serializable dict. The collector stores it as one record.
 | `needs` | env vars that must all be set; otherwise a "missing env" skip, re-checked every 6 h |
 | `defaults` | settings, overridable under `[sources.NAME]` |
 | `requires` | settings that must be non-empty (`"a|b"`: either) |
-| `optin` | off until `[sources.NAME]` exists |
+| `optin` | off until `[sources.NAME]` exists; or a `callable(host)` that says whether this machine opted in (a switch in another table) |
 | `binaries` | executables that must be on PATH |
 | `hosts` | machine names, `#tags`, or `callable(host)` |
 | `identities` | `"*"` or a tuple of identity names |
@@ -144,10 +144,13 @@ Results:
 
 `@panel(key, title)` registers a builder `fn(x) -> Panel | None`. `x` is the
 render context: `x.data(name)`, `x.cw` (column width), `x.v` (live vitals),
-`x.lv` (all live probes), `x.alerts`, `x.cfg`, `x.host`, `x.stale_note(name)`
+`x.lv` (all live probes), `x.alerts`, `x.cfg`, `x.host`, `x.last_seen` (the
+previous login's time, or None: for "since your last visit"), `x.stale_note(name)`
 ("12m" when older than expected, "✖ 3h" after a failure), and
 `x.panel(key, rows, level, note)`. Helpers: `kv(label, value, width)`,
-`cells(items, width)` (as many columns as fit), `SEP`, and the `theme` module
-(`c`, `dim`, `dot`, `sev`, `bar`, `pad`, `fit`, `width`, `g`, `worst`,
-`level_for`). Builders read the cache only, never the network; lines are
+`cells(items, width)` (as many columns as fit), `fitted(items, room)` (as many
+items as fit on one row, then "+N" for the rest), `wrap(text, widths)` (words
+onto lines of those widths, cut only when one alone is wider than its line), `SEP`, and the `theme`
+module (`c`, `dim`, `dot`, `sev`, `bar`, `pad`, `fit`, `width`, `g`, `worst`,
+`level_for`, `spark`). Builders read the cache only, never the network; lines are
 truncated to the column, ANSI-aware.

@@ -4,8 +4,9 @@
     porchlight demo --width 160 --color truecolor | scripts/ansi2svg.py --title "atlas" > docs/img/demo.svg
 
 Every glyph is placed by terminal column, so alignment does not depend on the
-viewer's font metrics; block elements (▀ ▄ █ ▌) are drawn as rectangles so
-banners render without the hairline gaps fonts leave between rows.
+viewer's font metrics; block elements (▀ ▄ █ ▌, and the eighths ▁ to ▇ of a spark)
+are drawn as rectangles so banners and sparks render without the hairline gaps and
+uneven heights fonts give them.
 """
 import argparse
 import html
@@ -82,7 +83,9 @@ def parse(text: str):
     return rows
 
 
-BLOCKS = {"█": (0.0, 1.0), "▀": (0.0, 0.5), "▄": (0.5, 1.0), "▌": None}
+BLOCKS = {"█": (0.0, 1.0), "▀": (0.0, 0.5), "▄": (0.5, 1.0), "▌": None,
+          # the lower eighths a spark is drawn with: fonts give them each their own height
+          "▁": (0.875, 1.0), "▂": (0.75, 1.0), "▃": (0.625, 1.0), "▅": (0.375, 1.0), "▆": (0.25, 1.0), "▇": (0.125, 1.0)}
 # Meter and rule strokes as (y offset, thickness, width share) of a cell: fonts draw them thin and broken.
 LINES = {"━": (0.40, 0.22, 1.0), "╸": (0.40, 0.22, 0.5), "─": (0.48, 0.06, 1.0)}
 

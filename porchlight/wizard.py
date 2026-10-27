@@ -157,6 +157,15 @@ def generate() -> tuple:
             L += ["# [sources.%s]  # opt in to a read-only cloud account check" % source,
                   "# " + setting, ""]
             notes.append("%s: found; enable sources.%s to check its account" % (binary, source))
+    if core.which("aws"):
+        L += ["# [sources.aws_account]   # the AWS panel: the account at list price, its budget, idle spend",
+              '# profile = "readonly"     # the one profile it reads with; default: the first one STS accepts',
+              '# home_regions = ["us-east-1"]',
+              '# cost_explorer = "daily"  # adds Cost Explorer: one $0.01 request a day ("off" by default)', ""]
+        notes.append("aws: found; the AWS panel reads the account (sources.aws_account)")
+    drover_state = core.expand(os.environ.get("DROVER_STATE") or "~/.local/state/drover")
+    if os.path.exists(os.path.join(drover_state, "daemon.json")):
+        notes.append("drover: a daemon is running here; the DROVER panel shows its sessions")
     if core.which("tailscale") or os.path.exists("/Applications/Tailscale.app"):
         L += ["[sources.tailscale]", "required = false   # true: alert when tailscaled is not running", ""]
         notes.append("tailscale: found")
