@@ -281,8 +281,11 @@ class Inventory(Base):
                  "aws-cli/3.0.0 Python/3.16.0 Linux/7.0.0": True,
                  "": False, "command not found": False}
         self.assertEqual({v: aws.reads_budget_filters(v) for v in cases}, cases)
-        self.assertEqual(aws.cli_version("aws-cli/1.33.0 Python/3.12.3 Linux/6.8.0 botocore/1.40.3"),
-                         "1.33.0 (botocore 1.40.3)")
+        v1 = "aws-cli/1.33.0 Python/3.12.3 Linux/6.8.0 botocore/1.40.3"
+        self.assertEqual(aws.cli_version(v1), "1.33.0 with botocore 1.40.3")
+        self.assertEqual(aws.budget_note(v1),
+                         "needs aws CLI 2.28.4+ or botocore 1.40.4+ for budget filters (has 1.33.0 with botocore 1.40.3)")
+        self.assertEqual(aws.budget_note(""), "needs aws CLI 2.28.4+ for budget filters (version unknown)")
 
     def test_a_cli_too_old_for_budget_filters_shows_no_budget_as_the_accounts(self):
         old = "aws-cli/2.14.6 Python/3.11.6 Linux/6.8.0-31-generic source/x86_64.ubuntu.24"
@@ -292,7 +295,7 @@ class Inventory(Base):
         self.assertEqual([b["scoped"] for b in d["budgets"]], [True, True])  # none can be shown to cover everything
         self.assertIsNone(aws.account_budget(d["budgets"]))
         self.assertFalse(any("budget" in a["msg"] for a in r.get("alerts") or []))
-        self.assertEqual(d["budget_note"], "aws CLI 2.14.6 too old for budget filters: needs 2.28.4+")
+        self.assertEqual((d["budget_note"], d["budget_filters"]), ("needs aws CLI 2.28.4+ for budget filters (has 2.14.6)", False))
         # A budgets read that fails reuses last run's rows: they are not confirmed either.
         self.fake(regions=account(), version=old, fail=lambda s, c, reg: "\nthrottled\n" if s == "budgets" else None)
         prev = dict(r, details=dict(d, budgets=[dict(b, scoped=False) for b in d["budgets"]]))
@@ -300,6 +303,28 @@ class Inventory(Base):
         self.assertEqual([b["scoped"] for b in d2["budgets"]], [True, True])
         self.assertIn("budget_error", d2)
         self.assertIn("budget_note", d2)
+
+    def test_a_run_out_of_time_trusts_reused_budget_rows_only_as_far_as_the_run_that_made_them(self):
+        self.fake(regions=account(), budgets=[BUDGET, SCOPED])
+        r = self.run_account(TOML)
+        self.assertIs(r["details"]["budget_filters"], True)
+        rows = [dict(b, scoped=b["name"] == SCOPED["n"]) for b in r["details"]["budgets"]]
+
+        def late(**details):  # this run has no time left for the budgets, so it reuses these rows
+            base = {k: v for k, v in r["details"].items() if k not in ("budget_note", "budget_filters")}
+            prev = dict(r, details=dict(base, budgets=rows, **{k: v for k, v in details.items() if v is not None}))
+            with mock.patch.object(aws, "RUN_BUDGET", 2.5):
+                return self.run_account(TOML, prev=prev)["details"]
+        d = late(budget_filters=True)                       # checked last run: the rows stand
+        self.assertEqual(([b["scoped"] for b in d["budgets"]], d["budget_filters"]), ([False, True], True))
+        self.assertIn("out of time", d["budget_error"])
+        d = late(budget_filters=None)                       # never checked (a record from before the check)
+        self.assertEqual([b["scoped"] for b in d["budgets"]], [True, True])
+        self.assertNotIn("budget_filters", d)
+        self.assertNotIn("budget_note", d)                  # nothing known to fix, so nothing to say
+        d = late(budget_filters=False, budget_note="needs aws CLI 2.28.4+ for budget filters (has 2.14.6)")
+        self.assertEqual([b["scoped"] for b in d["budgets"]], [True, True])
+        self.assertEqual(d["budget_note"], "needs aws CLI 2.28.4+ for budget filters (has 2.14.6)")
 
     def test_a_dedicated_host_without_an_instance_bills_and_alerts(self):
         regions = {"us-east-1": {"hosts": [{"id": "h-1", "fam": "mac2-m2", "ty": "mac2-m2.metal", "st": "available",
@@ -813,14 +838,16 @@ class Panel(unittest.TestCase):
         d = demo()
         det = d["aws_account"]["details"]
         det["budgets"] = [dict(b, scoped=True) for b in det["budgets"]]
-        det["budget_note"] = "aws CLI 2.14.6 too old for budget filters: needs 2.28.4+"
+        det["budget_note"] = "needs aws CLI 2.28.4+ or botocore 1.40.4+ for budget filters (has 1.33.0 with botocore 1.40.3)"
         self.load(d)
         for cw in (58, 90):
             rows = self.text(cw=cw)
-            note = [r for r in rows if r.startswith("budget")]
-            self.assertEqual(len(note), 1, rows)
-            self.assertIn("2.14.6 too old", note[0])
+            at = next(i for i, r in enumerate(rows) if r.startswith("budget"))
+            note = " ".join(r.split(None, 1)[-1] if i == at else r.strip() for i, r in enumerate(rows[at:at + 2], at))
+            self.assertIn("needs aws CLI 2.28.4+", rows[at])                  # the fix leads, on the first line
+            self.assertIn("for budget filters", note)
             self.assertFalse(any("of $400 budget" in r for r in rows))  # no budget row-mate claims the account's
+            self.assertTrue(all(T.width(r) <= cw - 1 for r in rows), rows)
         d2 = demo()
         d2["aws_account"]["details"]["budget_note"] = "stale"    # an account budget is shown: no note
         self.load(d2)

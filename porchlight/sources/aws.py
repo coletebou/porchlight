@@ -400,10 +400,20 @@ def narrows(f) -> bool:
 
 
 def cli_version(line) -> str:
-    """ "2.38.6", or "1.33.0 (botocore 1.40.4)" for v1, from an `aws --version` line; "" if none."""
+    """ "2.38.6", or "1.33.0 with botocore 1.40.4" for v1, from an `aws --version` line; "" if none."""
     m = re.search(r"aws-cli/(\d+\.\d+\.\d+)", line or "")
     b = re.search(r"botocore/(\d+\.\d+\.\d+)", line or "")
-    return (m.group(1) + (" (botocore %s)" % b.group(1) if b else "")) if m else ""
+    return (m.group(1) + (" with botocore %s" % b.group(1) if b else "")) if m else ""
+
+
+def budget_note(line) -> str:
+    """The AWS panel's budget row for a CLI that cannot read budget filters: the fix first, so a
+    narrow column keeps it."""
+    have = cli_version(line)
+    need = "aws CLI %s+" % ".".join(map(str, BUDGET_FILTERS_CLI))
+    if "botocore" in have:
+        need += " or botocore %s+" % ".".join(map(str, BUDGET_FILTERS_BOTOCORE))
+    return "needs %s for budget filters (%s)" % (need, "has " + have if have else "version unknown")
 
 
 def reads_budget_filters(line) -> bool:
@@ -512,7 +522,9 @@ def _aws_account(ctx):
                               limit=PRICE_LOOKUPS if left() > 10 else 0)
     spot = spot_prices(ctx, prof, instances, workers, timeout=max(1.0, left() - 5)) if left() > 6 else {}
     burn, idle = costs(instances, vols, eips, hosts, prices, spot)
-    berr, ver, filters = None, "", True
+    # Whether this CLI can read budget filters: last run's verdict until this run checks (None: never
+    # checked), so rows a run out of time reuses are trusted only as far as the run that made them.
+    berr, ver, filters = None, None, prev.get("budget_filters") if isinstance(prev.get("budget_filters"), bool) else None
     try:
         if left() < 3:
             raise ProbeError("skipped: out of time")
@@ -524,7 +536,7 @@ def _aws_account(ctx):
         brows = budgets(ctx, prof, acct, filters)
     except ProbeError as e:
         brows, berr = [b for b in prev.get("budgets") or [] if isinstance(b, dict)], masked(e)
-    if not filters:  # last run's rows too: this CLI cannot confirm any of them
+    if filters is not True:  # last run's rows too: nothing confirms any of them
         brows = [dict(b, scoped=True) for b in brows]
     swept = {str(k): v for k, v in _d(st.get("swept")).items() if k in enabled}
     swept.update({r: int(now) for r in regs if not regs[r]["err"]})
@@ -549,9 +561,10 @@ def _aws_account(ctx):
         d["profile_errors"] = errs  # profiles tried before the one that answered
     if berr:
         d["budget_error"] = berr
-    if brows and not filters:
-        d["budget_note"] = "aws CLI %s too old for budget filters: needs %s+" % (
-            cli_version(ver) or "(version unknown)", ".".join(map(str, BUDGET_FILTERS_CLI)))
+    if filters is not None:
+        d["budget_filters"] = filters
+    if brows and filters is False:  # this run's check, or last run's note when this run could not check
+        d["budget_note"] = budget_note(ver) if ver is not None else (_text(prev.get("budget_note"), 120) or budget_note(""))
     if perrs:
         d["price_errors"] = {k: masked(v) for k, v in sorted(perrs.items())[:4]}
     status, al = _verdict("aws", [], alerts(instances, vols, hosts, home, account_budget(brows), twice))
