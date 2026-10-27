@@ -34,12 +34,15 @@ class Panel:
 
 
 class RCtx:
-    """Everything a panel builder needs: host, cache, live probes, alerts, column width."""
+    """Everything a panel builder needs: host, cache, live probes, alerts, column width,
+    and the previous login's time (last_seen; None before the first login) for "since
+    your last visit"."""
 
-    def __init__(self, host, cache, lv, alerts, cw):
+    def __init__(self, host, cache, lv, alerts, cw, last_seen=None):
         self.host, self.cache, self.lv, self.alerts, self.cw = host, cache, lv, alerts, cw
         self.v = lv["vitals"]
         self.cfg = host.cfg
+        self.last_seen = last_seen
 
     def data(self, name, default=None):
         return self.cache.data(name, default)
@@ -92,6 +95,50 @@ def cells(items, cw, minw=14) -> list:
     w = min(cw, max(minw, max(T.width(i) for i in items) + 2))
     per = max(1, cw // w)
     return ["".join(T.pad(i, w) for i in items[r:r + per]).rstrip() for r in range(0, len(items), per)]
+
+
+def fitted(items, room: int, sep=None, more=None) -> str:
+    """As many items as fit in `room` cells, joined by `sep` (default SEP), then "+N"
+    (or more(N)) for the rest: a row that never cuts an item, or a word, in half."""
+    sep = SEP if sep is None else sep
+    more = more or (lambda n: T.dim("+%d" % n))
+    items = [i for i in items if i]
+    out = []
+    for n, it in enumerate(items):
+        rest = len(items) - n - 1
+        tail = T.width(str(sep) + more(rest)) if rest else 0
+        if T.width(sep.join(out + [it])) + tail > room:
+            return sep.join(out + [more(len(items) - n)])
+        out.append(it)
+    return sep.join(out)
+
+
+def wrap(text: str, widths) -> list:
+    """Words laid onto lines of the given widths, one line per width at most, never
+    cutting a word: text that does not fit (a word wider than its line included) ends
+    the last line with an ellipsis after the last whole word. [] when not even the
+    first word fits with its ellipsis."""
+    words, lines, i = str(text or "").split(), [], 0
+    widths = list(widths)
+    for w in widths:
+        if i >= len(words) or T.width(words[i]) > w:
+            break
+        line = words[i]
+        i += 1
+        while i < len(words) and T.width(line + " " + words[i]) <= w:
+            line += " " + words[i]
+            i += 1
+        lines.append(line)
+    mark = T.ellipsis()
+    while i < len(words) and lines:  # more text than room: the last line says so
+        cut = lines[-1].split(" ")
+        while cut and T.width(" ".join(cut) + mark) > widths[len(lines) - 1]:
+            cut.pop()
+        if cut:
+            lines[-1] = " ".join(cut) + mark
+            break
+        lines.pop()  # a lone word with no room left for the mark: end on the line before
+    return lines
 
 
 def fnum(x: float) -> str:

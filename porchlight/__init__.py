@@ -12,7 +12,7 @@ __version__ = "0.1.0"
 
 # Only names that are not submodules: `from . import core` inside the package
 # must reach the import system, not this hook.
-_API = {"source", "panel", "Panel", "kv", "cells", "SEP", "EVERYONE"}
+_API = {"source", "panel", "Panel", "kv", "cells", "fitted", "wrap", "SEP", "EVERYONE"}
 
 
 def __getattr__(name):

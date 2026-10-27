@@ -3,6 +3,7 @@ collector scheduling, alerts, and rendering at phone, laptop and wide widths."""
 import os
 import time
 import unittest
+from unittest import mock
 
 import support  # noqa: F401 — must be first: isolates cache/config
 from support import host, put
@@ -60,6 +61,39 @@ class Width(unittest.TestCase):
         T.configure("porchlight")
         self.assertEqual(T.hexrgb("#fff"), (255, 255, 255))
         self.assertIsNone(T.hexrgb("#12"))
+
+
+class RowHelpers(unittest.TestCase):
+    """ui.fitted and ui.wrap: rows that fit their column without cutting a word."""
+
+    def setUp(self):
+        T.set_mode("none")
+        self.addCleanup(T.set_mode, "truecolor")
+
+    def test_fitted_counts_what_does_not_fit(self):
+        from porchlight.ui import fitted
+        items = ["alpha $10", "beta $20", "gamma $30", "delta $40"]
+        self.assertEqual(fitted(items, 100), "alpha $10 · beta $20 · gamma $30 · delta $40")
+        self.assertEqual(fitted(items, 30), "alpha $10 · beta $20 · +2")
+        self.assertEqual(fitted(items, 3), "+4")
+        self.assertEqual(fitted(["a", "", None, "b"], 20, ", "), "a, b")
+        self.assertEqual(fitted(items, 30, more=lambda n: "+%d $%d" % (n, 10 * n)), "alpha $10 · beta $20 · +2 $20")
+        for room in range(3, 60):
+            self.assertLessEqual(T.width(fitted(items, room)), max(room, 2), room)
+
+    def test_wrap_breaks_between_words(self):
+        from porchlight.ui import wrap
+        q = "Do you want to proceed? 1. Yes / 2. Yes, and do not ask again / 3. No"
+        self.assertEqual(wrap(q, [30, 40]), ["Do you want to proceed? 1. Yes", "/ 2. Yes, and do not ask again / 3. No"])
+        self.assertEqual(wrap(q, [20, 20]), ["Do you want to", "proceed? 1. Yes /…"])
+        self.assertEqual(wrap("short", [30, 40]), ["short"])
+        self.assertEqual(wrap("", [10]), [])
+        self.assertEqual(wrap("see https://example.com/a/very/long/path then", [20, 20]), ["see…"])  # never inside a word
+        self.assertEqual(wrap("see https://example.com/a/very/long/path then", [20, 40]),
+                         ["see", "https://example.com/a/very/long/path…"])  # a long word that fits its own line
+        self.assertEqual(wrap("https://example.com/a/very/long/path", [20]), [])  # not even the first word fits
+        self.assertEqual(wrap("one two", [3]), [])  # no room for the ellipsis: nothing, rather than a line that looks whole
+        self.assertEqual(wrap("one two three", [4, 3]), ["one…"])  # ...or the line before carries it
 
 
 class Fonts(unittest.TestCase):
@@ -162,6 +196,18 @@ class Identities(unittest.TestCase):
         self.assertEqual(self.st('[sources.t_needs_cfg]\ntargets = ["x"]', "t_needs_cfg"), "on")
         self.assertEqual(self.st("", "t_bin"), "no definitely-not-a-real-binary-xyz")
         self.assertEqual(self.st("[sources.t_any]\nenabled = false", "t_any"), "disabled")
+
+    def test_an_optin_callable_decides(self):
+        """An opt-in switch that lives in another table (aws_cost follows aws_account's cost_explorer)."""
+        registry.source("t_gate", optin=lambda h: h.label == "on-here")(lambda ctx: {})
+        try:
+            self.assertEqual(self.st("", "t_gate"), "opt-in")
+            self.assertEqual(self.st('[general]\nlabel = "on-here"', "t_gate"), "on")
+            self.assertEqual(self.st("[sources.t_gate]\n", "t_gate"), "opt-in")  # the table alone does not opt in
+            self.assertEqual(self.st("[sources.t_gate]\nenabled = true", "t_gate"), "on")
+            self.assertEqual(self.st('[general]\nlabel = "on-here"\n[sources.t_gate]\nenabled = false', "t_gate"), "disabled")
+        finally:
+            registry.SOURCES.pop("t_gate")
 
     def test_host_filters(self):
         registry.source("t_hub", hosts=("#hub",))(lambda ctx: {})
@@ -350,6 +396,16 @@ class Secrets(unittest.TestCase):
         self.assertEqual(secrets.mask(parsed, settings), parsed)  # settings under TOKEN/SECRET/_KEY names
         self.assertNotIn("abcd", secrets.redact("sudo abcd", settings))  # four characters under a password name
 
+    def test_mask_shapes_masks_by_pattern_and_never_by_value(self):
+        uri = "https://" + "bob:hunter2" + "@example.com/x"
+        text = "use sk-ant-%s or %s, then deploy web-1 with %s" % ("b2" * 12, uri, "A" * 44)
+        out = secrets.mask_shapes(text)
+        self.assertEqual(out, "use sk-ant-… or https://<redacted>@example.com/x, then deploy web-1 with <redacted>")
+        with mock.patch.object(secrets, "_ENV", {"DB_PASSWORD": "web-1"}):
+            self.assertIn("deploy web-1", secrets.mask_shapes(text))  # a secret's value on the screen stays put
+            self.assertNotIn("web-1", secrets.redact("deploy web-1"))  # error text is another matter
+        self.assertEqual(secrets.mask_shapes(""), "")
+
     def test_dotenv_parsing(self):
         p = os.path.join(support.TMP, "s.env")
         with open(p, "w") as f:
@@ -484,6 +540,17 @@ class Rendering(unittest.TestCase):
         finally:
             T.set_ascii(False)
             T.set_mode("truecolor")
+
+    def test_panels_see_the_previous_login(self):
+        from porchlight.ui import BUILDERS
+        seen = []
+        BUILDERS["t_seen"] = lambda x: seen.append(x.last_seen)
+        try:
+            render.render(self.h, self.cache, width=150, only=["t_seen"])
+        finally:
+            BUILDERS.pop("t_seen")
+        stamp = core.read_json(os.path.join(core.STATE_DIR, "last_visit.json"))["ts"]
+        self.assertEqual(seen, [stamp])
 
     def test_broken_panel_does_not_blank_dashboard(self):
         from porchlight.ui import BUILDERS

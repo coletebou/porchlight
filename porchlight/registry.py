@@ -59,7 +59,8 @@ def source(name, ttl=600, timeout=10.0, scope="local", hosts=None, needs=(), ret
     identities "*" or a tuple of identity names this source serves by default
     defaults   the source's settings, overridable under [sources.<name>]
     requires   settings that must be non-empty before the source runs ("targets"; "a|b" = either)
-    optin      off unless [sources.<name>] exists or sets enabled = true
+    optin      off unless [sources.<name>] exists or sets enabled = true; a callable(host)
+               decides instead whether this machine opted in (another table's switch, say)
     share      ship this host-local record to the hub inside the snapshot (fleet panels)
     binaries   executables that must be on PATH (otherwise the source is "off")
     """
@@ -87,7 +88,7 @@ def state(src, host) -> str:
         return "denied"
     if enabled is False:
         return "disabled"
-    if src.optin and enabled is not True and not host.cfg.source_configured(src.name):
+    if src.optin and enabled is not True and not _opted_in(src, host):
         return "opt-in"
     filt = cfg.get("hosts", src.hosts)
     if not host.matches(filt):
@@ -99,6 +100,14 @@ def state(src, host) -> str:
         if not core.which(b, tuple(cfg.get("paths") or ())):
             return "no %s" % b
     return "on"
+
+
+def _opted_in(src, host) -> bool:
+    """An opt-in source runs once its [sources.<name>] table exists, or when its optin
+    callable says this machine opted in."""
+    if callable(src.optin):
+        return bool(src.optin(host))
+    return host.cfg.source_configured(src.name)
 
 
 def scope_of(src, host) -> str:

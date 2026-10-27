@@ -125,7 +125,16 @@ def redact(text, env=None, limit: int = 300) -> str:
         flat = " ".join(v.split())
         if flat:
             text = text.replace(flat, "<redacted:%s>" % name)
+    return mask_shapes(text)[:limit]
+
+
+def mask_shapes(text: str) -> str:
+    """Credentials in URIs, token-shaped strings and long base64 runs, masked by their
+    shape alone. For text another program wrote for display (session names, questions):
+    replacing secret *values* in it would tell the reader which secret equals which
+    visible word."""
+    if not text:
+        return text
     text = _URI_CREDS.sub(r"\1<redacted>@", text)
     text = _TOKENISH.sub(lambda m: m.group(1) + "…", text)
-    text = _LONG.sub("<redacted>", text)
-    return text[:limit]
+    return _LONG.sub("<redacted>", text)
