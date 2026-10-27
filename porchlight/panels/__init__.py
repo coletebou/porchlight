@@ -9,7 +9,7 @@ import sys
 
 from ..ui import BUILDERS, TITLES  # noqa: F401
 
-for _mod in ("core", "ai", "cloud", "dev", "drover", "ops"):
+for _mod in ("core", "ai", "cloud", "aws", "dev", "drover", "ops"):
     try:
         importlib.import_module("%s.%s" % (__name__, _mod))
     except ImportError as e:  # a missing optional module must not break the rest

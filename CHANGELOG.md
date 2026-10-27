@@ -21,11 +21,38 @@ All notable changes to this project are documented here. The format follows
   works where, and on the fleet hub each daemon's commit and the credential pool.
   The board is read with Drover's read-only widget token whenever there is one;
   Drover's text is masked by pattern only, never by matching secret values.
+- An AWS panel: the month against the account budget with a forecast, a two-week
+  spark, the burn per hour, spend by service, every running instance at its list
+  price, dedicated hosts, and what stopped boxes still cost a month. MONEY shows
+  the month in one line.
+- `aws_account` now reads the whole account with free calls only: every enabled
+  region (the home regions each run, the others swept a few per run), list prices
+  from the Price List API cached for a week (on-demand, spot, EBS, dedicated
+  hosts, public IPv4), and the account's budgets. It warns when the month is over
+  the budget, when anything runs outside the home regions, and when a dedicated
+  host has no instance on it. At most `max_concurrent` aws processes run at once.
+- An `aws_cost` source (opt-in, `cost_explorer = "daily"`): the month's spend by
+  day and by service from Cost Explorer, at most one billed request per UTC date.
+  The cap is enforced in the source against the last attempt, noted before the
+  request goes out, so `collect --force`, `collect aws_cost` and retries never
+  add a request; the CLI's own retries and pagination are off, and in a fleet
+  only the hub asks. Account ids in stored profile names and AWS errors keep
+  only their last four digits.
 - Panel helpers for plugins: `fitted()` (as many items as fit, then "+N"),
   `wrap()` (words onto lines, a word cut only when it alone outgrows its line),
   `theme.spark()`, and
   `x.last_seen` (the previous login) on the render context. A source's `optin`
   may be a callable that decides whether a machine opted in.
+
+### Changed
+- `[sources.aws_account]` reads one account: `profile` (when set, the only
+  profile tried) replaces `profiles`, and `home_regions` replaces `regions`.
+  `cost_explorer` takes `"daily"` or `"off"` (the default); `true` still means
+  daily. An expired or missing login is now a soft failure that keeps the last
+  inventory, with the login command in the panel, instead of a warning that hid it.
+- INFRA shows a one-line AWS summary only when the AWS panel is not in the
+  layout. MONEY's AWS line is the month against the budget; with
+  `cost_explorer = true` it used to ask Cost Explorer every hour for each account.
 
 ### Fixed
 - `git status` scans (the REPOS panel and the `repos` source) no longer take

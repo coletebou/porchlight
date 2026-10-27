@@ -11,7 +11,7 @@ from . import config as C, core
 
 # Panels in their canonical order; layout.panels = "auto" shows whichever have data.
 AUTO_PANELS = ["system", "services", "agents", "drover", "docker", "fleet", "network", "ai", "prs", "access",
-               "instances", "health", "edge", "infra", "comms", "backups", "files", "money", "repos"]
+               "instances", "health", "edge", "infra", "aws", "comms", "backups", "files", "money", "repos"]
 
 
 def _detect_role() -> str:

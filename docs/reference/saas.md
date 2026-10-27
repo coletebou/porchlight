@@ -1,9 +1,10 @@
 # SaaS and cloud sources
 
-Twelve sources watch the services a small team or a homelab runs on:
+Eleven sources watch the services a small team or a homelab runs on:
 Cloudflare, Vercel, UptimeRobot, Hetzner, GitHub, Sentry, Stripe, Resend,
-Langfuse, AI API spend (OpenRouter, Anthropic, OpenAI, xAI), AWS and Twilio.
+Langfuse, AI API spend (OpenRouter, Anthropic, OpenAI, xAI) and Twilio.
 The EDGE, INFRA, COMMS and MONEY panels show them (see [Panels](#panels)).
+The AWS account and its bill have their own page: [aws.md](aws.md).
 
 Each source turns itself on when its credentials are present: set the
 variables in your shell or in a `[general] secrets_files` file, and run
@@ -14,8 +15,8 @@ variables in your shell or in a `[general] secrets_files` file, and run
 **Read-only.** Every request is a GET, apart from exactly three read-only POST
 queries: Cloudflare GraphQL, GitHub GraphQL, and UptimeRobot's v2
 `getMonitors` (only when the v3 API refuses). Nothing creates, changes or
-deletes anything. The only subprocesses are `gh auth token` and three
-read-only AWS CLI calls. A test audits the source file for these rules.
+deletes anything. The only subprocess is `gh auth token`. A test audits the
+source file for these rules.
 
 **Credentials** travel in request headers (UptimeRobot v2 takes its key in the
 POST body, the way that API is defined). They never appear in a URL, an error,
@@ -24,8 +25,8 @@ once more before it is written. Redirects are never followed, so a credential
 cannot be forwarded to another host, and a token is only ever sent to the host
 it was issued for, never to one an API merely names.
 
-**Timeouts.** Each request has a 6 second timeout, each AWS CLI call 15
-seconds, and the collector's deadline caps every run.
+**Timeouts.** Each request has a 6 second timeout, and the collector's
+deadline caps every run.
 
 **Results.** Every source stores `{"status": "ok" | "warn" | "crit" |
 "unknown", "summary": "...", "details": {...}, "error": null | "..."}`. Each
@@ -45,8 +46,8 @@ deny = ["stripe", "ai_spend"]
 ```
 
 **Common settings**, valid in every `[sources.<name>]` table: `enabled`,
-`hosts`, `identities`, and `paths` (extra directories to search for `gh` and
-`aws`). `ignore` lists match case-insensitive substrings of a name.
+`hosts`, `identities`, and `paths` (extra directories to search for `gh`).
+`ignore` lists match case-insensitive substrings of a name.
 
 ## `cloudflare`
 
@@ -323,34 +324,6 @@ from the 1st, UTC); `GET https://api.openai.com/v1/organization/costs`;
 `GET https://management-api.x.ai/auth/management-keys/validation` and
 `/v1/billing/teams/{team}/prepaid/balance`.
 
-## `aws_account`
-
-The STS identity behind each AWS CLI profile, running EC2 instances in each
-account, and (opt-in) month-to-date cost. Only the last four digits of an
-account id are kept, and never the role session name.
-
-**Credentials:** the AWS CLI's own: SSO, profiles or environment credentials.
-The source is off when `aws` is not installed. An expired SSO login is a
-warning with the `aws sso login --profile ...` fix.
-
-```toml
-[sources.aws_account]
-profiles = []          # empty: AWS_PROFILE, then every profile in ~/.aws/config (up to eight)
-regions = []           # empty: each profile's own region (else AWS_REGION, else us-east-1)
-cost_explorer = false  # true adds month-to-date cost; AWS bills $0.01 per Cost Explorer call
-```
-
-Two profiles into one account are counted once.
-
-**Alerts.** warn: every profile's login expired (with the fix), an EC2 query
-failing.
-
-**Commands** (read-only): `aws sts get-caller-identity`, `aws ec2
-describe-instances --filters Name=instance-state-name,Values=running`, and
-with `cost_explorer` `aws ce get-cost-and-usage`. The CLI runs with
-`AWS_EC2_METADATA_DISABLED=true`, so a machine without credentials does not
-wait on the instance metadata service.
-
 ## `twilio`
 
 Account balance and today's SMS count.
@@ -384,9 +357,9 @@ https://api.twilio.com/2010-04-01/Accounts/{sid}/Balance.json` and
 | Panel | Shows |
 |-------|-------|
 | `edge` | UptimeRobot monitors, the `sites` endpoints, Cloudflare tunnels, traffic and inactive zones, Vercel production deploys |
-| `infra` | Hetzner servers and Storage Box fill, GitHub CI per repo with open PRs, Sentry, AWS accounts |
+| `infra` | Hetzner servers and Storage Box fill, GitHub CI per repo with open PRs, Sentry, and a one-line AWS summary when the AWS panel is not in the layout |
 | `comms` | Resend domains and sends, Cloudflare Email Routing, Twilio SMS |
-| `money` | Stripe balance, subscriptions and MRR, Anthropic and OpenAI month-to-date, OpenRouter credits, xAI, the Hetzner run-rate, AWS Cost Explorer, Cursor on-demand spend, the Twilio balance |
+| `money` | Stripe balance, subscriptions and MRR, Anthropic and OpenAI month-to-date, OpenRouter credits, xAI, the Hetzner run-rate, the AWS month against its budget ([aws.md](aws.md)), Cursor on-demand spend, the Twilio balance |
 
 A panel's note names a source whose reading is stale or whose last run failed
 (`cloudflare ✖ 2h`). A service that answered with a reason and no data (a

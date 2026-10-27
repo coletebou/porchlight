@@ -1,4 +1,4 @@
-"""Account sources: Stripe, Resend, Langfuse, AI API spend, the AWS account, Twilio.
+"""Account sources: Stripe, Resend, Langfuse, AI API spend, Twilio (AWS: aws.py, aws_cost.py).
 
 Split from sources/saas.py, whose transport and result helpers (and safety
 rules: read-only, credentials only in headers, no redirects with credentials,
@@ -14,7 +14,6 @@ import urllib.parse
 from .. import core
 from . import saas  # _now via the module, so a test patching saas._now reaches these too
 from .saas import (  # noqa: F401 — the shared transport, parsing and result helpers
-    CLI_TIMEOUT,
     ProbeError,
     _api_err,
     _clip,
@@ -403,142 +402,6 @@ def _ai_spend(ctx):
     known = any(p["status"] != "unknown" for p in parts.values())
     error = None if known else "; ".join("%s: %s" % (n, p["error"]) for n, p in parts.items() if p["error"])
     return _res(_worst([p["status"] for p in parts.values()]), " | ".join(summary), d, error, alerts)
-
-
-# ── AWS: STS identity per profile, running EC2, Cost Explorer (opt-in) ─────
-# The AWS CLI rather than an SDK: no dependency, and its credential chain (SSO,
-# profiles, env) is the user's own. Cost Explorer is opt-in: AWS bills $0.01 a call.
-_EC2_QUERY = "Reservations[].Instances[].{n:Tags[?Key=='Name']|[0].Value,t:InstanceType}"
-
-
-def _aws_bin(ctx):
-    return core.which("aws", tuple(ctx.cfg.get("paths") or ()))
-
-
-def _aws_profiles(ctx) -> list:
-    """[(profile, region)]: [sources.aws_account] profiles, else AWS_PROFILE and then every
-    profile in the AWS config file ([sso-session] blocks are not profiles)."""
-    regions, cur = {}, None
-    for line in core.read_text(core.expand(ctx.env.get("AWS_CONFIG_FILE") or "~/.aws/config")).splitlines():
-        m = re.match(r"^\s*\[\s*(default|profile\s+([^\]\s]+))\s*\]\s*$", line)
-        if m:
-            cur = m.group(2) or "default"
-            regions.setdefault(cur, "")
-        elif re.match(r"^\s*\[", line):
-            cur = None
-        elif cur:
-            m = re.match(r"^\s*region\s*=\s*([a-z0-9\-]+)\s*$", line)
-            if m and not regions[cur]:
-                regions[cur] = m.group(1)
-    first = [ctx.env["AWS_PROFILE"]] if ctx.env.get("AWS_PROFILE") else []
-    names = _strs(ctx.cfg.get("profiles")) or first + [n for n in regions if n not in first]
-    return [(n, regions.get(n, "")) for n in names[:8]]
-
-
-def _aws_err(stderr) -> str:
-    lines = (stderr or "").strip().splitlines()
-    low = (lines[-1] if lines else "").lower()
-    if "token has expired" in low or ("sso" in low and "expired" in low):
-        return "sso-expired"
-    if "unable to locate credentials" in low:
-        return "no-credentials"
-    if "expiredtoken" in low or ("security token" in low and "expired" in low):
-        return "credentials-expired"
-    if "accessdenied" in low or "unauthorizedoperation" in low:
-        return "access-denied"
-    return _scrub(lines[-1] if lines else "aws failed", 80)
-
-
-def _aws(ctx, args, profile, region=None):
-    b = _aws_bin(ctx)
-    if not b:
-        raise ProbeError("aws CLI not found")
-    argv = [b] + args + ["--output", "json", "--cli-connect-timeout", "4", "--cli-read-timeout", "5"]
-    if profile:
-        argv += ["--profile", profile]
-    if region:
-        argv += ["--region", region]
-    from .. import secrets
-    env = secrets.child_env(ctx.env, keep=("AWS_",))
-    env.update(AWS_EC2_METADATA_DISABLED="true", AWS_PAGER="", AWS_CLI_AUTO_PROMPT="off")  # no IMDS probe, no prompt
-    rc, out, err = ctx.run(argv, timeout=CLI_TIMEOUT, env=env)
-    if rc in (124, 126, 127):
-        raise ProbeError({124: "timeout", 126: "cannot run aws", 127: "aws CLI not found"}[rc])
-    if rc != 0:
-        raise ProbeError(_aws_err(err))
-    try:
-        return json.loads(out or "null")
-    except ValueError:
-        raise ProbeError("aws: bad JSON") from None
-
-
-@_saas("aws_account", "aws", ttl=3600, timeout=30, binaries=("aws",),
-       defaults={"profiles": [], "regions": [], "cost_explorer": False})
-def _aws_account(ctx):
-    """AWS: identity per CLI profile, running EC2, Cost Explorer (opt-in)"""
-    if not _aws_bin(ctx):
-        return _fail("aws CLI not found", "aws CLI not installed")
-    cfg = ctx.cfg
-    profs = _aws_profiles(ctx) or [(None, "")]  # no config file: the CLI's own chain (environment credentials)
-    sts = _pmap({str(i): (lambda p=p: _aws(ctx, ["sts", "get-caller-identity"], p)) for i, (p, _r) in enumerate(profs)},
-                timeout=CLI_TIMEOUT + 2)
-    errs, accounts, seen = {}, [], set()
-    for i, (p, reg) in enumerate(profs):
-        v, e = sts[str(i)]
-        label = p or "default"
-        acct = str(_d(v).get("Account") or "")
-        if e or not acct:
-            errs[label] = e or "no account in reply"
-            continue
-        _cred(ctx, acct)  # only its last four digits are ever kept
-        if acct in seen:
-            continue  # two profiles into one account: count its instances once
-        seen.add(acct)
-        arn = str(_d(v).get("Arn") or "")
-        want = [r for r in _strs(cfg.get("regions")) if re.match(r"^[a-z0-9\-]{4,30}$", r)]
-        accounts.append({"profile": label, "_p": p, "account_last4": acct[-4:],
-                         "principal_type": arn.split(":")[5].split("/")[0] if arn.count(":") >= 5 else "?",
-                         "_regions": want or [reg or ctx.env.get("AWS_REGION") or ctx.env.get("AWS_DEFAULT_REGION") or "us-east-1"]})
-    if not accounts:
-        expired = [p for p, e in errs.items() if e == "sso-expired"]
-        if expired:
-            fix = "aws sso login --profile %s" % expired[0]
-            return _res("warn", "SSO token expired: " + fix, {"profile_errors": errs}, "sso-expired",
-                        [{"sev": "warn", "msg": "aws: SSO token expired (%s)" % expired[0], "fix": fix}])
-        return _res("unknown", "no usable AWS credentials", {"profile_errors": errs}, "; ".join(sorted(set(errs.values()))))
-    now = saas._now()
-    span = "Start=%s,End=%s" % (time.strftime("%Y-%m-%d", time.gmtime(_month_start(now))),
-                                time.strftime("%Y-%m-%d", time.gmtime(now + 86400)))
-    calls = {}
-    for i, a in enumerate(accounts):
-        for r in a["_regions"][:6]:
-            calls["ec2:%d:%s" % (i, r)] = (lambda a=a, r=r: _aws(ctx, ["ec2", "describe-instances", "--filters",
-                                                                     "Name=instance-state-name,Values=running",
-                                                                     "--query", _EC2_QUERY], a["_p"], r))
-        if cfg.get("cost_explorer"):
-            calls["ce:%d" % i] = (lambda a=a: _aws(ctx, ["ce", "get-cost-and-usage", "--time-period", span, "--granularity",
-                                                         "MONTHLY", "--metrics", "UnblendedCost"], a["_p"], "us-east-1"))
-    res = _pmap(calls, timeout=CLI_TIMEOUT + 2)
-    partial, total = False, 0
-    for i, a in enumerate(accounts):
-        ec2 = {}
-        for r in a.pop("_regions")[:6]:
-            v, e = res["ec2:%d:%s" % (i, r)]
-            ec2[r] = {"error": e} if e else {"count": len(_dicts(v)), "names": [str(x["n"]) for x in _dicts(v) if x.get("n")][:8]}
-            partial = partial or bool(e)
-            total += ec2[r].get("count", 0)
-        a["ec2_running"] = ec2
-        if "ce:%d" % i in res:
-            v, e = res["ce:%d" % i]
-            try:
-                a["mtd_unblended_usd"] = round(float(v["ResultsByTime"][0]["Total"]["UnblendedCost"]["Amount"]), 2)
-            except (KeyError, IndexError, ValueError, TypeError):
-                a["ce_error"] = e or "unexpected Cost Explorer reply"
-        a.pop("_p")
-    d = {"accounts": accounts, "profiles": len(profs), "profile_errors": errs}
-    status, alerts = _verdict("aws", [], ["EC2 query failed (partial data)"] if partial else [])
-    head = ("acct ...%s" % accounts[0]["account_last4"]) if len(accounts) == 1 else "%d accounts" % len(accounts)
-    return _res(status, "%s, %d EC2 running%s" % (head, total, " (partial)" if partial else ""), d, None, alerts)
 
 
 # ── Twilio: balance and today's SMS ─────────────────────────────────────────

@@ -1,5 +1,6 @@
 """SaaS and cloud sources: Cloudflare, Vercel, UptimeRobot, Hetzner, GitHub,
-Sentry, Stripe, Resend, Langfuse, AI API spend, AWS and Twilio.
+Sentry, Stripe, Resend, Langfuse, AI API spend and Twilio. The AWS account and its
+bill share these helpers from aws.py and aws_cost.py, which keep their own audit.
 
 Every source returns {"status": ok|warn|crit|unknown, "summary": "<= 60 chars",
 "details": {...}, "error": None | "short reason"}, plus "alerts" for each warn
@@ -11,7 +12,7 @@ Rules this module keeps (a test audits the first; preserve them all):
   * Read-only. GET everywhere, plus exactly three read-only POST queries:
     Cloudflare GraphQL, GitHub GraphQL and the UptimeRobot v2 getMonitors
     fallback. Nothing creates, changes or deletes remote state; the only
-    subprocesses are `gh auth token` and three read-only AWS CLI calls.
+    subprocess is `gh auth token`.
   * Credentials travel in request headers (UptimeRobot v2 alone takes its key
     in the POST body): never in a URL, an error, a summary or the details, and
     every result is scrubbed of credential values once more before it is kept.
@@ -32,7 +33,6 @@ from .. import core, secrets
 from ..registry import source
 
 REQ_TIMEOUT = 6.0   # seconds per HTTP request
-CLI_TIMEOUT = 15.0  # seconds per AWS CLI call: the CLI's own start-up is most of it
 SUMMARY_MAX = 60
 
 
@@ -94,23 +94,31 @@ def _get(ctx, url, headers=None, params=None, label="", basic=None, expect=dict)
     return j
 
 
-def _pmap(calls, timeout=None) -> dict:
+def _pmap(calls, timeout=None, workers=None) -> dict:
     """Run zero-arg callables concurrently → {key: (value, error)}. Nothing escapes.
-    Plain daemon threads, as in core.parallel, but the error text is kept."""
+    Plain daemon threads, as in core.parallel, but the error text is kept. With
+    `workers`, at most that many run at once, and one still queued at the deadline
+    never starts (it reads as a timeout, like one still running)."""
     import threading
     out = {}
+    deadline = time.monotonic() + (timeout or 2 * REQ_TIMEOUT + 1)
+    gate = threading.BoundedSemaphore(workers) if workers else None
 
     def run(key, fn):
+        if gate is not None and not gate.acquire(timeout=max(0.0, deadline - time.monotonic())):
+            return
         try:
             out[key] = (fn(), None)
         except ProbeError as e:
             out[key] = (None, str(e))
         except Exception as e:  # noqa: BLE001 — a parser bug must not take the whole source down
             out[key] = (None, "%s: %s" % (type(e).__name__, _scrub(e)))
+        finally:
+            if gate is not None:
+                gate.release()
     threads = [threading.Thread(target=run, args=(k, f), daemon=True) for k, f in calls.items()]
     for t in threads:
         t.start()
-    deadline = time.monotonic() + (timeout or 2 * REQ_TIMEOUT + 1)
     for t in threads:
         t.join(max(0.0, deadline - time.monotonic()))
     return {k: out.get(k, (None, "timeout")) for k in calls}

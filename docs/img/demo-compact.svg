@@ -35,15 +35,15 @@
 <rect x="144.0" y="89.0" width="8.80" height="18.88" fill="#daab3a"/>
 <rect x="169.2" y="89.0" width="8.80" height="9.64" fill="#e4a628"/>
 <rect x="177.6" y="98.2" width="8.80" height="9.64" fill="#e7a422"/>
-<text x="211.2" y="103.4" fill="#d8d8d8">Wed</text>
+<text x="211.2" y="103.4" fill="#d8d8d8">Tue</text>
 <text x="244.8" y="103.4" fill="#d8d8d8">Oct</text>
-<text x="278.4" y="103.4" fill="#d8d8d8">21</text>
+<text x="278.4" y="103.4" fill="#d8d8d8">27</text>
 <text x="303.6" y="103.4" fill="#d8d8d8">·</text>
-<text x="320.4" y="103.4" fill="#d8d8d8">18:20</text>
+<text x="320.4" y="103.4" fill="#d8d8d8">06:52</text>
 <text x="370.8" y="103.4" fill="#d8d8d8">UTC</text>
 <text x="412.8" y="103.4" fill="#787878">·</text>
-<text x="438.0" y="103.4" fill="#787878">19:20</text>
-<text x="488.4" y="103.4" fill="#787878">BST</text>
+<text x="438.0" y="103.4" fill="#787878">06:52</text>
+<text x="488.4" y="103.4" fill="#787878">GMT</text>
 <rect x="26.4" y="107.4" width="8.80" height="9.64" fill="#d5c47b"/>
 <rect x="43.2" y="107.4" width="8.80" height="9.64" fill="#d0be6d"/>
 <rect x="68.4" y="107.4" width="8.80" height="9.64" fill="#c9b458"/>
@@ -80,14 +80,14 @@
 <text x="228.0" y="158.8" fill="#ef4444" font-weight="bold">4</text>
 <text x="244.8" y="158.8" fill="#ef4444" font-weight="bold">critical</text>
 <text x="328.8" y="158.8" fill="#f59e0b">●</text>
-<text x="345.6" y="158.8" fill="#f59e0b">11</text>
+<text x="345.6" y="158.8" fill="#f59e0b">13</text>
 <text x="370.8" y="158.8" fill="#f59e0b">warnings</text>
 <text x="211.2" y="177.3" fill="#787878">last</text>
 <text x="253.2" y="177.3" fill="#787878">visit</text>
 <text x="303.6" y="177.3" fill="#d8d8d8">3h</text>
 <text x="328.8" y="177.3" fill="#d8d8d8">ago</text>
 <text x="362.4" y="177.3" fill="#787878">·</text>
-<text x="379.2" y="177.3" fill="#76b0e0" font-weight="bold">14</text>
+<text x="379.2" y="177.3" fill="#76b0e0" font-weight="bold">16</text>
 <text x="404.4" y="177.3" fill="#76b0e0" font-weight="bold">new</text>
 <text x="438.0" y="177.3" fill="#76b0e0" font-weight="bold">alerts</text>
 <rect x="26.4" y="199.8" width="4.2" height="18.5" fill="#ef4444"/>
@@ -191,7 +191,7 @@
 <text x="370.8" y="306.7" fill="#d8d8d8">in</text>
 <text x="396.0" y="306.7" fill="#d8d8d8">12d</text>
 <text x="43.2" y="325.1" fill="#787878">…</text>
-<text x="60.0" y="325.1" fill="#787878">10</text>
+<text x="60.0" y="325.1" fill="#787878">12</text>
 <text x="85.2" y="325.1" fill="#787878">more</text>
 <text x="127.2" y="325.1" fill="#787878">·</text>
 <text x="144.0" y="325.1" fill="#787878">porchlight</text>
@@ -707,45 +707,50 @@
 <text x="34.8" y="731.7" fill="#787878">host</text>
 <text x="144.0" y="731.7" fill="#787878">load</text>
 <text x="194.4" y="731.7" fill="#787878">mem</text>
-<text x="228.0" y="731.7" fill="#787878">disk</text>
-<text x="278.4" y="731.7" fill="#787878">agents</text>
-<text x="362.4" y="731.7" fill="#787878">alerts</text>
-<text x="438.0" y="731.7" fill="#787878">seen</text>
+<text x="228.0" y="731.7" fill="#787878">swap</text>
+<text x="270.0" y="731.7" fill="#787878">disk</text>
+<text x="312.0" y="731.7" fill="#787878">agents</text>
+<text x="396.0" y="731.7" fill="#787878">alerts</text>
+<text x="463.2" y="731.7" fill="#787878">seen</text>
 <text x="26.4" y="750.2" fill="#ef4444">●</text>
 <text x="43.2" y="750.2" fill="#e4e4e4">atlas</text>
 <text x="144.0" y="750.2" fill="#22c55e">3.18</text>
 <text x="194.4" y="750.2" fill="#22c55e">67%</text>
-<text x="236.4" y="750.2" fill="#22c55e">83%</text>
-<text x="278.4" y="750.2" fill="#d8d8d8">3cl</text>
-<text x="312.0" y="750.2" fill="#d8d8d8">2co</text>
-<text x="362.4" y="750.2" fill="#ef4444">3✖</text>
-<text x="387.6" y="750.2" fill="#f59e0b">4▲</text>
-<text x="438.0" y="750.2" fill="#787878">now</text>
+<text x="236.4" y="750.2" fill="#22c55e">28%</text>
+<text x="278.4" y="750.2" fill="#22c55e">83%</text>
+<text x="312.0" y="750.2" fill="#d8d8d8">3cl</text>
+<text x="345.6" y="750.2" fill="#d8d8d8">2co</text>
+<text x="396.0" y="750.2" fill="#ef4444">3✖</text>
+<text x="421.2" y="750.2" fill="#f59e0b">5▲</text>
+<text x="463.2" y="750.2" fill="#787878">now</text>
 <text x="26.4" y="768.7" fill="#22c55e">●</text>
 <text x="43.2" y="768.7" fill="#e4e4e4">web-1</text>
 <text x="144.0" y="768.7" fill="#22c55e">0.42</text>
 <text x="194.4" y="768.7" fill="#22c55e">41%</text>
-<text x="236.4" y="768.7" fill="#22c55e">63%</text>
-<text x="278.4" y="768.7" fill="#d8d8d8">12/12</text>
-<text x="362.4" y="768.7" fill="#22c55e">ok</text>
-<text x="438.0" y="768.7" fill="#787878">now</text>
+<text x="244.8" y="768.7" fill="#22c55e">3%</text>
+<text x="278.4" y="768.7" fill="#22c55e">63%</text>
+<text x="312.0" y="768.7" fill="#d8d8d8">12/12</text>
+<text x="396.0" y="768.7" fill="#22c55e">ok</text>
+<text x="463.2" y="768.7" fill="#787878">now</text>
 <text x="26.4" y="787.1" fill="#f59e0b">●</text>
 <text x="43.2" y="787.1" fill="#e4e4e4">db-1</text>
 <text x="144.0" y="787.1" fill="#22c55e">1.21</text>
 <text x="194.4" y="787.1" fill="#22c55e">78%</text>
-<text x="236.4" y="787.1" fill="#f59e0b">88%</text>
-<text x="278.4" y="787.1" fill="#787878">-</text>
-<text x="362.4" y="787.1" fill="#f59e0b">1▲</text>
-<text x="438.0" y="787.1" fill="#787878">now</text>
+<text x="236.4" y="787.1" fill="#22c55e">34%</text>
+<text x="278.4" y="787.1" fill="#f59e0b">88%</text>
+<text x="312.0" y="787.1" fill="#787878">-</text>
+<text x="396.0" y="787.1" fill="#f59e0b">1▲</text>
+<text x="463.2" y="787.1" fill="#787878">now</text>
 <text x="26.4" y="805.6" fill="#ef4444">●</text>
 <text x="43.2" y="805.6" fill="#e4e4e4">gpu-box</text>
 <text x="144.0" y="805.6" fill="#f59e0b">7.93</text>
 <text x="194.4" y="805.6" fill="#f59e0b">92%</text>
-<text x="236.4" y="805.6" fill="#22c55e">71%</text>
-<text x="278.4" y="805.6" fill="#d8d8d8">2cl</text>
-<text x="312.0" y="805.6" fill="#d8d8d8">1co</text>
-<text x="362.4" y="805.6" fill="#ef4444">1✖</text>
-<text x="438.0" y="805.6" fill="#787878">now</text>
+<text x="236.4" y="805.6" fill="#f59e0b">86%</text>
+<text x="278.4" y="805.6" fill="#22c55e">71%</text>
+<text x="312.0" y="805.6" fill="#d8d8d8">2cl</text>
+<text x="345.6" y="805.6" fill="#d8d8d8">1co</text>
+<text x="396.0" y="805.6" fill="#ef4444">1✖</text>
+<text x="463.2" y="805.6" fill="#787878">now</text>
 <text x="26.4" y="824.1" fill="#ef4444">●</text>
 <text x="43.2" y="824.1" fill="#d8d8d8">nas</text>
 <text x="135.6" y="824.1" fill="#787878">offline</text>

@@ -543,7 +543,10 @@ class Rendering(unittest.TestCase):
 
     def test_new_panels_take_their_place_in_the_auto_layout(self):
         self.assertLess(hosts.AUTO_PANELS.index("agents"), hosts.AUTO_PANELS.index("drover"))
-        self.assertIn(" DROVER ", T.strip(render.render(self.h, self.cache, width=200)))
+        self.assertLess(hosts.AUTO_PANELS.index("infra"), hosts.AUTO_PANELS.index("aws"))
+        full = T.strip(render.render(self.h, self.cache, width=200))
+        for title in ("DROVER", "AWS"):
+            self.assertIn(" %s " % title, full)
 
     def test_panels_see_the_previous_login(self):
         from porchlight.ui import BUILDERS

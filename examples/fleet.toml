@@ -14,6 +14,11 @@ targets = [{ label = "shop", url = "https://shop.example.com" }, { label = "docs
 repos = ["acme/shop", "acme/infra"]
 branch = "main"
 
+[sources.aws_account]            # collected by the hub, shown on every machine
+profile = "readonly"             # a read-only role: the panel never falls back to another login
+home_regions = ["us-east-1"]
+cost_explorer = "daily"          # one $0.01 Cost Explorer request a day
+
 [hosts."studio"]                 # the desktop: the hub
 fleet.peers = ["web-1", "db-1", "nas"]
 theme.accent = "porchlight"

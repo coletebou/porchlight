@@ -1,6 +1,7 @@
 """Cloud panels: EDGE (uptime, sites, Cloudflare, Vercel), INFRA (Hetzner,
-GitHub CI, Sentry, AWS), COMMS (Resend, Cloudflare Email Routing, Twilio) and
-MONEY (Stripe, API spend, credits, run-rates, balances).
+GitHub CI, Sentry, and AWS when the AWS panel is not in the layout), COMMS (Resend,
+Cloudflare Email Routing, Twilio) and MONEY (Stripe, API spend, credits, run-rates,
+the AWS month, balances).
 
 They read the records sources/saas.py writes (plus `sites` and `cursor_usage`)
 and never touch the network. A service without credentials stores a "missing
@@ -12,7 +13,8 @@ hand-edited cache, may hold anything, and must not cost the panel.
 from __future__ import annotations
 
 from .. import core, theme as T
-from ..ui import SEP, cells, kv, panel
+from ..ui import SEP, cells, fitted, kv, panel
+from . import aws as aws_panel
 from .ops import endpoint_cells
 
 
@@ -259,28 +261,20 @@ def p_infra(x):
                            (T.dim(" (" + ", ".join("%s %d" % t for t in top) + ")") if top else ""), W))
         else:
             rows.append(kv("sentry", _quiet(se), W))
-    aw = _rec(x, "aws_account")
+    aw = _rec(x, "aws_account") if "aws" not in x.host.panels else None  # the AWS panel has the detail
     if aw:
         used.append("aws_account")
         det = _det(aw)
-        accts = _l(det.get("accounts"))
-        for i, a in enumerate(accts[:3]):
-            ec2 = {str(r): v for r, v in _d(a.get("ec2_running")).items() if isinstance(v, dict)}
-            n = sum(_n(v.get("count")) for v in ec2.values())
-            errs = [r for r, v in ec2.items() if v.get("error")]
-            l2 = "warn" if errs else "ok"
+        if "instances" in det:
+            l2 = _st(aw)
             lvl = _up(lvl, l2)
-            txt = T.dot(l2) + " " + str(a.get("profile")) + T.dim(" %s%s" % (T.ellipsis(), a.get("account_last4"))) + SEP + \
-                "%d EC2 running" % n
-            if len(ec2) > 1:
-                txt += T.dim(" (%s)" % ", ".join("%s %d" % (r, _n(v.get("count"))) for r, v in ec2.items() if not v.get("error")))
-            if errs:
-                txt += SEP + T.c("%s %s" % (errs[0], ec2[errs[0]]["error"]), "amber")
-            rows.append(kv("aws" if i == 0 else "", txt, W))
-        expired = [str(p) for p, e in _d(det.get("profile_errors")).items() if e in ("sso-expired", "credentials-expired")]
-        if accts and expired:
-            rows.append(kv("", T.dim("%s: login expired" % ", ".join(expired[:3])), W))
-        if not accts:
+            insts = _l(det.get("instances"))
+            running = sum(1 for i in insts if i.get("state") in ("running", "pending"))
+            who = str(det.get("profile") or "?")[:24] + T.dim(" %s%s" % (T.ellipsis(), str(det.get("account_last4") or "?")[:4]))
+            rows.append(kv("aws", T.dot(l2) + " " + fitted([who, "%d/%d running" % (running, len(insts)),
+                                                           "%s/h" % _money(_n(_d(det.get("burn")).get("total_h")))],
+                                                          x.cw - 1 - W - 2), W))
+        else:
             lvl = _up(lvl, _st(aw))
             rows.append(kv("aws", (T.dot(_st(aw)) + " " + str(aw.get("summary"))) if _st(aw) != "unknown" else _quiet(aw), W))
     if not rows:
@@ -407,11 +401,13 @@ def p_money(x):
     if est is not None:
         used.append("hetzner")
         rows.append(kv("hetzner", "~%s/mo" % _money(est, _det(_rec(x, "hetzner")).get("currency")) + T.dim(" price-list run-rate"), W))
-    ce = [a for a in _l(_det(_rec(x, "aws_account")).get("accounts")) if _n(a.get("mtd_unblended_usd"), None) is not None]
-    if ce:  # Cost Explorer, when opted in
+    mv = aws_panel.month_view(x)
+    if mv:  # the account budget's spend, else Cost Explorer's; the AWS panel has the rest
         used.append("aws_account")
-        rows += _rows("aws", [_money(a["mtd_unblended_usd"]) + T.dim(" month to date") + SEP + T.dim(str(a.get("profile")))
-                              for a in ce[:3]], W)
+        if mv["budget"] and mv["mtd"] > mv["budget"]["limit"]:
+            lvl = _up(lvl, "warn")
+        burn = _n(_d(aws_panel.account(x).get("burn")).get("total_h"), None)
+        rows.append(kv("aws", aws_panel.month_line(mv, x.cw - 1 - W, burn), W))
     od_used = _n(_d(_d(x.data("cursor_usage")).get("credits")).get("on_demand_used_usd"))
     if od_used:
         used.append("cursor_usage")
