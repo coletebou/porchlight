@@ -61,10 +61,11 @@ record is what still knows about a session that finished before your last visit.
 It asks only for what is new since the stored cursor, keeps one entry per session
 and kind (its latest), a week of history and twenty entries at most.
 
-A daemon that does not answer (not running, or slower than six seconds) is shown
-as it is, like a container engine that is not running: the last board is not
-passed off as current, and its waiting alert goes with it. The feed and its
-cursor are kept for the daemon's return.
+A daemon that does not answer (not running, or slower than twenty seconds: a busy
+daemon can take several to rebuild its board) is shown as it is, like a container
+engine that is not running: the last board is not passed off as current, and its
+waiting alert goes with it. The feed and its cursor are kept for the daemon's
+return.
 
 ```toml
 [sources.drover]

@@ -38,7 +38,7 @@ FEED_DAYS = 7
 CURSOR_MAX = 16384     # the daemon's cursor lists the ids it delivered recently
 WAITING_KEEP = 8
 WORKING_KEEP = 40
-NATIVE_TIMEOUT = 6.0   # native.summary builds on the daemon's fleet summary, which can take seconds cold
+NATIVE_TIMEOUT = 20.0  # native.summary may rebuild every host's board first: 7-12 s on a busy 6-core host
 _FEED_KINDS = ("finished", "error")
 _FEED_TITLE = re.compile(r"^(.*?)\s+(finished|exited unexpectedly|exited with code -?\d+|stopped answering|"
                          r"hit an error|failed|errored)$", re.I)
@@ -252,7 +252,7 @@ def waiting_alert(waiting, total: int, here: str) -> str:
     return "%d agents waiting on you (%s%s)" % (total, shown, ", …" if total > 3 else "")
 
 
-@source("drover", ttl=90, timeout=12, defaults={"state_dir": "", "versions": "hub", "pool": "hub", "recheck_minutes": 10})
+@source("drover", ttl=90, timeout=25, defaults={"state_dir": "", "versions": "hub", "pool": "hub", "recheck_minutes": 10})
 def drover(ctx):
     """Drover: who waits on you and why, what finished or crashed, who works on which host."""
     cfg, prev = ctx.cfg, ctx.prev or {}
@@ -266,7 +266,7 @@ def drover(ctx):
     jobs = {"summary": lambda: op(ctx, url, read, "native.summary", {}, timeout=NATIVE_TIMEOUT),
             "feed": lambda: feed(ctx, url, read, prev),
             "details": lambda: details(ctx, url, main, prev, cfg)}
-    res = core.parallel(jobs, timeout=10.0)
+    res = core.parallel(jobs, timeout=NATIVE_TIMEOUT + 2)
     got, why = res.get("summary") or (None, "timeout")
     if not isinstance(got, dict):
         # A daemon that does not answer is this machine's state, as an engine that is not

@@ -71,12 +71,15 @@ class Daemon:
     def __init__(self, items=(), cursor="c1.next"):
         self.items, self.cursor, self.reqs = list(items), cursor, []
         self.down = self.summary_fails = False
+        self.slow = {}  # op -> seconds it takes: a caller that waits less gets the timeout urllib raises
 
     def __call__(self, url, method="GET", headers=None, json_body=None, timeout=6.0, **kw):
         op = url.rsplit("/", 1)[-1]
         auth = (headers or {}).get("Authorization", "")
         tok = auth[len("Bearer "):] if auth.startswith("Bearer ") else ""
         self.reqs.append({"op": op, "token": tok, "body": json_body, "method": method, "url": url, "timeout": timeout})
+        if timeout < self.slow.get(op, 0):
+            raise TimeoutError("timed out")
         if self.down:
             raise ConnectionRefusedError("refused")
         if tok not in (MAIN, WIDGET):
@@ -247,6 +250,14 @@ class Source(Base):
         stored = core.read_text(registry.src_path("drover"))
         self.assertNotIn(MAIN, stored)
         self.assertNotIn(WIDGET, stored)
+
+    def test_a_busy_daemon_that_takes_sixteen_seconds_for_its_board_is_up(self):
+        d = self.daemon()
+        d.slow["native.summary"] = 16.0  # a cold board took 7.1 and 11.8 s on a 6-core host at load 37
+        data = self.run_src()
+        self.assertEqual(data["daemon"], "up")
+        d.slow["native.summary"] = 60.0  # slower than the wait: it is not answering
+        self.assertEqual(self.run_src()["daemon"], "down")
 
     def test_a_daemon_that_does_not_answer_is_down_and_keeps_its_feed(self):
         d = self.daemon()
