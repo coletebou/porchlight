@@ -869,12 +869,13 @@ class Panel(unittest.TestCase):
 
     def test_the_full_dashboard_fits(self):
         self.load()
-        for w in (60, 120, 200):
-            out = render.render(host(AUTO), registry.Cache(), width=w)
-            for ln in out.splitlines():
-                self.assertLessEqual(T.width(ln), w)
-            self.assertNotIn("panel error", T.strip(out))
-        wide = T.strip(render.render(host(AUTO), registry.Cache(), width=200))
+        with support.calm_probes():
+            for w in (60, 120, 200):
+                out = render.render(host(AUTO), registry.Cache(), width=w)
+                for ln in out.splitlines():
+                    self.assertLessEqual(T.width(ln), w)
+                self.assertNotIn("panel error", T.strip(out))
+            wide = T.strip(render.render(host(AUTO), registry.Cache(), width=200))
         self.assertIn("aws: 1 instance, 1 volume in eu-west-1, outside the home regions", wide)  # the attention strip
 
 

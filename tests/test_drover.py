@@ -491,7 +491,8 @@ class Panel(Base):
 
     def test_the_dashboard_puts_the_waiting_alert_in_the_attention_strip(self):
         put("drover", demo())
-        out = T.strip(render.render(host(HUB), registry.Cache(), width=130))
+        with support.calm_probes():
+            out = T.strip(render.render(host(HUB), registry.Cache(), width=130))
         self.assertIn("2 agents waiting on you (demo-review@atlas, demo-migrate@gpu-box)", out)
         self.assertIn("DROVER", out)
 

@@ -88,6 +88,20 @@ def ctx(h, cfg=None, env=None, prev=None, http=None):
     return c
 
 
+CALM = {"vitals": {"cores": 8, "load": [0.4, 0.4, 0.4], "os": "Linux", "uptime": 86400.0, "ip": "",
+                   "mem": {"used": 4e9, "total": 16e9}, "swap": {"used": 0, "total": 0},
+                   "disks": [{"mount": "/", "used": 50e9, "total": 200e9, "pct": 25.0}], "stalled": []},
+        "units": [], "failed": [], "launchd": [], "tmux": {"sessions": 0, "windows": 0, "attached": 0}, "repos": []}
+
+
+def calm_probes():
+    """Patch the renderer's live probes to a quiet machine, so a full render does not depend
+    on the load, disks or services of the machine running the tests."""
+    from unittest import mock
+    from porchlight import alerts
+    return mock.patch.object(alerts, "probe_all", lambda host, vitals=None, repos=(): dict(CALM))
+
+
 def strip(s: str) -> str:
     return theme.strip(s)
 
