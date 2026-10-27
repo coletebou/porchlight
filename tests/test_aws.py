@@ -247,11 +247,21 @@ class Inventory(Base):
                           fx={"And": [{"Dimensions": {"Key": "SERVICE", "Values": ["Amazon Elastic Compute Cloud - Compute"]}},
                                       {"Not": {"Dimensions": {"Key": "RECORD_TYPE", "Values": ["Credit"]}}}]})
         old_style = dict(BUDGET, n="old-style", lim="950.0", f={"RecordType": ["Usage"]}, fx=None)
-        self.fake(regions=account(), budgets=[console, by_service, SCOPED, old_style])
+        views = "arn:aws:billing::%s:billingview/" % ACCT
+        custom_view = dict(BUDGET, n="custom-view", lim="990.0", f=None, fx=None, view=views + "custom-1a2b")
+        primary = dict(console, n="primary-view", lim="100.0", view=views + "primary")
+        self.fake(regions=account(), budgets=[console, by_service, SCOPED, old_style, custom_view, primary])
         rows = self.run_account(TOML)["details"]["budgets"]
-        self.assertEqual([b["scoped"] for b in rows], [False, True, True, False])
+        self.assertEqual([b["scoped"] for b in rows], [False, True, True, False, True, False])
         self.assertEqual(aws.account_budget(rows)["name"], "old-style")  # the largest that covers everything
+        self.assertNotIn(ACCT, json.dumps(rows))                          # the views' ARNs are not kept
         self.assertTrue(aws.narrows([{"Tags": {"Key": "team", "Values": ["lab"]}}]))
+        self.assertTrue(aws.narrows({"ProductAttributes": {"Key": "provider", "Values": ["Anthropic"]}}))
+        self.assertTrue(aws.narrows({"Not": {"Workloads": {"Key": "x", "Values": ["y"]}}}))  # a kind from later
+        self.assertTrue(aws.narrows({"Tags": {}}))                                            # the untagged costs
+        self.assertTrue(aws.narrows({"CostCategories": {"Key": "env", "MatchOptions": ["ABSENT"]}}))
+        self.assertFalse(aws.narrows({"Or": [{"Dimensions": {"Key": "RECORD_TYPE", "Values": ["Usage"]}},
+                                             {"Dimensions": {"Key": "RECORD_TYPE", "Values": ["Tax"]}}]}))
         self.assertFalse(aws.narrows(None))
 
     def test_a_dedicated_host_without_an_instance_bills_and_alerts(self):

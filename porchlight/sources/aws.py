@@ -54,7 +54,7 @@ _Q_HOST = ("Hosts[?State!='released'].{id:HostId,fam:HostProperties.InstanceFami
            "st:State,at:AllocationTime,n:length(Instances || `[]`)}")
 _Q_BUDGETS = ("Budgets[?BudgetType=='COST'].{n:BudgetName,u:TimeUnit,lim:BudgetLimit.Amount,cur:BudgetLimit.Unit,"
               "act:CalculatedSpend.ActualSpend.Amount,fc:CalculatedSpend.ForecastedSpend.Amount,"
-              "up:LastUpdatedTime,f:CostFilters,fx:FilterExpression}")
+              "up:LastUpdatedTime,f:CostFilters,fx:FilterExpression,view:BillingViewArn}")
 
 
 # ── The AWS CLI ─────────────────────────────────────────────────────────────
@@ -369,35 +369,44 @@ def costs(instances, vols, eips, hosts, prices, spot) -> tuple:
 
 
 def narrows(f) -> bool:
-    """Whether a budget's filters narrow what it counts (a service, a tag, a linked account),
-    rather than only leaving out record types: the console's default for a new budget is
-    {"Not": {"Dimensions": {"Key": "RECORD_TYPE", "Values": ["Credit", "Refund"]}}}, and
-    such a budget still covers the whole account."""
+    """Whether a budget's FilterExpression narrows what it counts. The console's default for a
+    new budget, {"Not": {"Dimensions": {"Key": "RECORD_TYPE", "Values": ["Credit", "Refund"]}}},
+    only leaves out record types and still covers the whole account; any other filter narrows
+    it (a service, a tag, a cost category, a Bedrock model, or a kind this code does not know)."""
+    if f is None:
+        return False
     if isinstance(f, list):
         return any(narrows(v) for v in f)
     if not isinstance(f, dict):
-        return False
-    dims = f.get("Dimensions")
-    if isinstance(dims, dict) and str(dims.get("Key") or "").upper() != "RECORD_TYPE":
         return True
-    if f.get("Tags") or f.get("CostCategories"):
-        return True
-    return any(narrows(f.get(k)) for k in ("And", "Or", "Not"))
+    for k, v in f.items():
+        if v is None:   # an empty leaf still filters: {"Tags": {}} selects the untagged costs
+            continue
+        if k in ("And", "Or", "Not"):
+            if narrows(v):
+                return True
+        elif not (k == "Dimensions" and isinstance(v, dict) and str(v.get("Key") or "").upper() == "RECORD_TYPE"):
+            return True
+    return False
 
 
 def budgets(ctx, prof, acct) -> list:
     """The account's COST budgets (the Budgets API is free; AWS refreshes the spend a few
-    times a day). The account id goes to the CLI's argv, never into the result."""
+    times a day). The account id goes to the CLI's argv, never into the result. A budget is
+    scoped by its legacy CostFilters, by its FilterExpression, or by a billing view other than
+    the account's primary one; the view's ARN holds the account id and is not kept."""
     out = []
     for b in _dicts(cli(ctx, ["budgets", "describe-budgets", "--account-id", acct, "--query", _Q_BUDGETS],
                         prof, "us-east-1")):
         lim, act, fc = _f(b.get("lim")), _f(b.get("act")), _f(b.get("fc"))
         if lim is None or act is None or str(b.get("cur") or "USD").upper() != "USD":
             continue
+        view = str(b.get("view") or "")
         out.append({"name": _text(b.get("n"), 40), "unit": _text(b.get("u"), 12), "limit": round(lim, 2),
                     "actual": round(act, 2), "forecast": None if fc is None else round(fc, 2),
                     "updated": _epoch(b.get("up")),
-                    "scoped": any(str(k).lower() != "recordtype" for k in _d(b.get("f"))) or narrows(b.get("fx"))})
+                    "scoped": (any(str(k).lower() != "recordtype" for k in _d(b.get("f"))) or narrows(b.get("fx"))
+                               or (bool(view) and not view.endswith("/primary")))})
     return out[:12]
 
 

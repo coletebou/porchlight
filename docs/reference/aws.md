@@ -83,9 +83,13 @@ unattached volumes, unassociated Elastic IPs, and dedicated hosts with no instan
 on them.
 
 **Budgets.** `budgets describe-budgets` (free) lists the account's cost budgets.
-The account budget is the largest monthly one without filters; its actual spend,
-which AWS refreshes a few times a day, is the month to date in the panel when
-there is one.
+The account budget is the largest monthly one that counts the whole account. Its
+filters may leave out record types, as the console's default for a new budget
+leaves out credits and refunds; a budget narrowed any other way (a service, a tag,
+a cost category, a linked account, a Bedrock model, a custom billing view, or a
+kind of filter porchlight does not know yet) is not it. Its actual spend, which
+AWS refreshes a few times a day, is the month to date in the panel when there is
+one.
 
 **What is kept.** Counts, prices and names: the account id's last four digits,
 never the whole id, the role session name or a public address. Any account id in
