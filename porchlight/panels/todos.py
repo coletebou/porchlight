@@ -8,7 +8,7 @@ that fit) with its actions.
 from __future__ import annotations
 
 from .. import core, theme as T
-from ..ui import SEP, fitted, kv, panel
+from ..ui import fitted, kv, panel
 
 W = 9
 SHOWN = 6
@@ -26,6 +26,10 @@ def _l(v) -> list:
 
 def _s(v, n=160) -> str:
     return " ".join(str(v).split())[:n] if isinstance(v, (str, int, float)) and not isinstance(v, bool) else ""
+
+
+def _int(v, default=0) -> int:
+    return v if isinstance(v, int) and not isinstance(v, bool) else default
 
 
 def _due(t) -> tuple:
@@ -49,7 +53,7 @@ def where(it) -> str:
 
 def row(it, room: int) -> str:
     due, dcol = _due(it.get("due"))
-    glyph = T.c("!", "red", bold=True) if dcol == "red" else (T.c(T.g("dot"), "amber") if (it.get("prio") or 5) <= 2
+    glyph = T.c("!", "red", bold=True) if dcol == "red" else (T.c(T.g("dot"), "amber") if _int(it.get("prio"), 5) <= 2
                                                               else T.dim(T.g("dot")))
     tail = T.dim(where(it)) + ((" " + T.c(due, dcol)) if due else "")
     left = room - 2 - T.width(tail) - 1
@@ -102,28 +106,30 @@ def p_todos(x):
     counts = [T.c(str(len(items)), "fg", bold=True) + T.dim(" open")]
     counts += ["%s %s" % (T.dim(SHORT.get(n, n)), _s(_d(p).get("n"))) for n, p in provs.items()]
     rows = [fitted(counts, room)]
-    overdue = int(d.get("overdue") or 0)
+    overdue = _int(d.get("overdue"))
     shown = int(x.cfg.get("sources.todos.shown", SHOWN) or SHOWN)
     rows += [row(it, room) for it in items[:shown]]
     if len(items) > shown:
-        rows.append(T.dim("  +%d more · porchlight todos" % (len(items) - shown)))
+        more = "  +%d more" % (len(items) - shown)
+        rows.append(T.dim(more + " · porchlight todos" if T.width(more) + 19 <= room else more))
     asks = _d(d.get("asks"))
     if asks:
         gaps = [(a, [str(m) for m in _d(v).get("missing") or []]) for a, v in asks.items()]
         gaps = [(a, m) for a, m in gaps if m]
         full = len(asks) - len(gaps)
-        head = T.c(str(len(asks)), "fg", bold=True) + T.dim(" tracked") + SEP + T.c(str(full), "green") + T.dim(" everywhere")
+        head = [T.c(str(len(asks)), "fg", bold=True) + T.dim(" tracked"), T.c(str(full), "green") + T.dim(" everywhere")]
         if gaps:
-            head += SEP + T.c("%d gap%s" % (len(gaps), "" if len(gaps) == 1 else "s"), "amber")
-        rows.append(kv("asks", head, W))
+            head.append(T.c("%d gap%s" % (len(gaps), "" if len(gaps) == 1 else "s"), "amber"))
+        rows.append(kv("asks", fitted(head, room - W), W))
         if gaps:
             cells_ = ["%s %s" % (a, T.dim("-" + ",".join(SHORT.get(m) or m for m in miss))) for a, miss in gaps]
             rows.append(" " * W + fitted(cells_, room - W))
     for n, p in provs.items():
         p = _d(p)
         if not p.get("ok"):
-            rows.append(T.c(T.g("crit"), "red") + " " + T.dim("%s: %s%s" % (SHORT.get(n, n), _s(p.get("error"), 80),
-                                                                         " (kept)" if p.get("kept") else "")))
+            kept = " (kept)" if p.get("kept") else ""
+            why = T.fit("%s: %s" % (SHORT.get(n, n), _s(p.get("error"), 80)), max(4, room - 2 - len(kept)))
+            rows.append(T.c(T.g("crit"), "red") + " " + T.dim(why + kept))
     level = "warn" if overdue else "ok"
     note = x.stale_note("todos", ttl_mult=6) or ("%d overdue" % overdue if overdue else "")
     return x.panel("todos", rows, level=level, note=note, items=tui_items(items))

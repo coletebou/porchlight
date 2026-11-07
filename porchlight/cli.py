@@ -107,7 +107,7 @@ def main(argv=None) -> int:
 
 def _main(argv) -> int:
     flags, opts, words = parse(argv)
-    if "-h" in flags or "--help" in flags or (words and words[0] == "help"):
+    if ("-h" in flags or "--help" in flags or (words and words[0] == "help")) and words[:1] != ["todos"]:
         print(__doc__.strip())
         return 0
     cmd = words[0] if words else "show"
