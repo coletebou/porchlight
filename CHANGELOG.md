@@ -7,6 +7,27 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- One fleet view ([docs/fleet-consistency.md](docs/fleet-consistency.md)): the
+  hub's `fleet.shared_panels` ride in the bundle (now `v2`, with the hub's
+  version and exchange interval), every peer shows them after its own panels in
+  the hub's order, `fleet.bundle_local` ships fleet-wide local records (Drover)
+  to peers that have none, and a peer says where its fleet data comes from and
+  warns when the bundle goes stale.
+- `porchlight -i`: an interactive dashboard. Move between panels, open an
+  item's details, open its link, copy it, hand it to an AI CLI, jump to a
+  Drover session, and (with `[interactive] allow_writes = true`, after a y/N)
+  act on it. The login path does not load it.
+- `porchlight view`: the dashboard as one JSON document (contract:
+  [docs/contracts/porchlight-view-v1.md](docs/contracts/porchlight-view-v1.md)),
+  plain text plus the items and actions behind each panel, from the cache.
+- A TODOS panel and `todos` source: open items from a Badland-compatible todos
+  API, Drover features, Drover reflections, GitHub issues by label and todo
+  files, in one list (contract:
+  [docs/contracts/todo-item-v1.md](docs/contracts/todo-item-v1.md)), with an
+  optional ask-coverage view that says which system is missing which ask.
+- A KNOWLEDGE panel and `knowledge` source: a brain's health and newest
+  entries, open reflections, wikis and links (contract:
+  [docs/contracts/knowledge-v1.md](docs/contracts/knowledge-v1.md)).
 - Opt-in GCP and Azure account checks in ACCESS, using the existing CLI logins
   and read-only API calls to distinguish verified access from cached accounts.
 - Gitea, Forgejo and Bitbucket Cloud providers in PULL REQUESTS, with explicit

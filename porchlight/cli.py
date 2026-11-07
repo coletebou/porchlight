@@ -16,6 +16,9 @@
   porchlight demo            a sample fleet dashboard, no setup needed
   porchlight themes          preview every theme
   porchlight watch [secs]    a live dashboard that redraws itself (a wall or a spare tab)
+  porchlight -i              interactive: move between panels, open an item, act on it
+                             (also: porchlight interactive, porchlight tui)
+  porchlight view [panel]    the dashboard as JSON (docs/contracts/porchlight-view-v1.md)
   porchlight badge           "✖2 ▲3" for a tmux status line or prompt (instant: no probes)
   porchlight top [N]         the processes using the most CPU and memory
   porchlight label           this machine's display label (for prompts)
@@ -143,6 +146,14 @@ def _main(argv) -> int:
 
     plugin_errors = sources.register_all(host)
     cache = registry.Cache()
+
+    if cmd in ("interactive", "tui") or (cmd == "show" and ("-i" in flags or "--interactive" in flags)):
+        from . import tui
+        return tui.run(host, flags, opts)
+    if cmd == "view":
+        from . import panels as _panels  # noqa: F401 — registers the built-in panels
+        from . import view
+        return view.run(host, cache, flags, words[1:])
 
     if cmd == "json":
         import json

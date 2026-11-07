@@ -405,18 +405,23 @@ def build_panels(ctx, keys) -> list:
     return built
 
 
-def render(host, cache, width=None, only=None, login=False, compact=None) -> str:
+class Frame:
+    """Everything one dashboard render computes before it lays text out: the width, the
+    live probes, the ranked alerts, the previous visit, the panel keys and the built
+    panels. render() turns it into text; porchlight -i (tui.py) and `porchlight view`
+    (view.py) reuse it so all three show the same panels from the same code."""
+
+    def __init__(self, W, lv, al, last_seen, compact, ctx, keys, built, only, t0):
+        self.W, self.lv, self.al, self.last_seen, self.compact = W, lv, al, last_seen, compact
+        self.ctx, self.keys, self.built, self.only, self.t0 = ctx, keys, built, only, t0
+
+
+def panel_keys(host, only=None, compact=False) -> list:
+    """The panel keys a render shows, in order: `only`, else the layout's panels, then
+    [[custom]] panels and (with layout.panels = "auto") plugin panels; the compact list
+    in compact mode."""
     from . import panels
-    t0 = time.monotonic()
-    W = width or term_width()
-    repos = list(host.repos) if (not only or "repos" in only) else []
-    lv = alerts.probe_all(host, repos=repos)
-    al = alerts.gather(host, cache, lv)
-    last_seen = visit(host, login, al)
-    compact = compact_mode(host, W, only) if compact is None else compact
-    _, cw = layout(W, host.cfg)
-    ctx = RCtx(host, cache, lv, al, cw, last_seen)
-    keys = only or host.panels
+    keys = list(only or host.panels)
     if not only:
         extra = panels.custom_keys(host)
         if host.auto_panels:  # plugin panels too, after the built-ins, whenever they have data
@@ -424,15 +429,38 @@ def render(host, cache, width=None, only=None, login=False, compact=None) -> str
         keys = keys + [k for k in extra if k not in keys]
     if compact:
         keys = [k for k in host.compact if k in panels.BUILDERS]
-    built = build_panels(ctx, keys)
+    return keys
+
+
+def prepare(host, cache, width=None, only=None, login=False, compact=None, repos=None) -> Frame:
+    """Probe, rank, build: the part of a render that is not layout. repos: probe the
+    tracked repos (default: unless `only` leaves the repos panel out)."""
+    t0 = time.monotonic()
+    W = width or term_width()
+    if repos is None:
+        repos = not only or "repos" in only
+    lv = alerts.probe_all(host, repos=list(host.repos) if repos else [])
+    al = alerts.gather(host, cache, lv)
+    last_seen = visit(host, login, al)
+    compact = compact_mode(host, W, only) if compact is None else compact
+    _, cw = layout(W, host.cfg)
+    ctx = RCtx(host, cache, lv, al, cw, last_seen)
+    keys = panel_keys(host, only, compact)
+    return Frame(W, lv, al, last_seen, compact, ctx, keys, build_panels(ctx, keys), only, t0)
+
+
+def render(host, cache, width=None, only=None, login=False, compact=None) -> str:
+    from . import panels
+    f = prepare(host, cache, width, only, login, compact)
+    W, compact, keys = f.W, f.compact, f.keys
     out = []
     if not only:
-        out += header(host, cache, lv, al, W, last_seen)
-        att = attention(al, W, int(host.cfg.get("layout.attention_compact" if compact else "layout.attention", 10)))
+        out += header(host, cache, f.lv, f.al, W, f.last_seen)
+        att = attention(f.al, W, int(host.cfg.get("layout.attention_compact" if compact else "layout.attention", 10)))
         if att:
             out += [""] + att
         out.append("")
-    out += grid(built, W, T.ACCENT, host.cfg)
+    out += grid(f.built, W, T.ACCENT, host.cfg)
     if not only:
         out.append("")
         if compact:
@@ -440,7 +468,6 @@ def render(host, cache, width=None, only=None, login=False, compact=None) -> str
             out.append(" " + T.fit(T.dim("compact view · ") + T.c("porchlight all", "slate") +
                                    T.dim(" for %s" % ("every panel" if hidden else "the full layout") + " (or widen the window)"), W - 1))
         else:
-            out += footer(host, cache, W, t0)
+            out += footer(host, cache, W, f.t0)
     text = "\n".join(out)
     return T.asciify(text) if T.ASCII else text
-

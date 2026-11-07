@@ -20,9 +20,56 @@ def panel(key, title=None):
     return deco
 
 
+class Action:
+    """Something the interactive dashboard (porchlight -i) can do with an item.
+
+    name    a handler registered in porchlight.actions (@action("todos.done")); the
+            built-ins are "open_url", "copy" and "run"
+    label   what the key hint says ("mark done")
+    key     one character, unique within the item ("d")
+    args    JSON-able arguments for the handler; never a credential (a handler loads
+            its own from the secrets files when it runs)
+    writes  True when the handler changes state somewhere (an API write, a message):
+            refused unless [interactive] allow_writes = true, and always confirmed
+    confirm the y/N question asked before a write ("Mark 'renew cert' done in Badland?")
+    """
+
+    def __init__(self, name, label, key, args=None, writes=False, confirm=""):
+        self.name, self.label, self.key = str(name), str(label), str(key)[:1]
+        self.args = dict(args or {})
+        self.writes, self.confirm = bool(writes), str(confirm or "")
+
+    def to_dict(self) -> dict:
+        return {"name": self.name, "label": self.label, "key": self.key, "args": self.args,
+                "writes": self.writes, "confirm": self.confirm}
+
+
+class Item:
+    """One selectable row behind a panel, for porchlight -i and `porchlight view`.
+
+    id      stable across renders ("todos:badland:69bc3f..."), so a selection survives a redraw
+    text    one plain line (no ANSI): what the item list shows
+    detail  plain text lines for the detail pane (may be empty)
+    level   "ok" | "info" | "warn" | "crit"
+    url     an optional link (the TUI offers "open" for it)
+    actions Action list; "open_url" for url is added by the TUI itself
+    """
+
+    def __init__(self, id, text, detail=None, level="ok", url="", actions=None):
+        self.id, self.text = str(id), str(text)
+        self.detail = [str(d) for d in (detail or [])]
+        self.level, self.url = str(level), str(url or "")
+        self.actions = list(actions or [])
+
+    def to_dict(self) -> dict:
+        return {"id": self.id, "text": self.text, "detail": self.detail, "level": self.level, "url": self.url,
+                "actions": [a.to_dict() for a in self.actions]}
+
+
 class Panel:
-    def __init__(self, key, title, lines, level="ok", note=""):
+    def __init__(self, key, title, lines, level="ok", note="", items=None):
         self.key, self.title, self.lines, self.level, self.note = key, title, lines, level, note
+        self.items = list(items or [])  # Item list for porchlight -i and `porchlight view`; the login render ignores it
 
     def render(self, cw: int, accent) -> list:
         title = T.c(self.title, T.gradient(accent, 0.15), bold=True)
@@ -60,8 +107,8 @@ class RCtx:
         ttl = src.ttl if src else 600
         return core.human_age(age) if age > max(ttl * ttl_mult, floor) else ""
 
-    def panel(self, key, rows, level="ok", note="", title=None):
-        return Panel(key, title or TITLES.get(key) or key.upper(), rows, level, note) if rows else None
+    def panel(self, key, rows, level="ok", note="", title=None, items=None):
+        return Panel(key, title or TITLES.get(key) or key.upper(), rows, level, note, items) if rows else None
 
 
 class _Sep:

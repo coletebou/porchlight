@@ -231,6 +231,7 @@ porchlight alerts          ranked, with fixes   porchlight top          where th
 porchlight collect         refresh now          porchlight themes       preview every theme
 porchlight init            starter config       porchlight label        this machine's display name
 porchlight install all     timer + login hook   porchlight demo         a sample fleet
+porchlight -i              interactive          porchlight view [panel] the dashboard as JSON
 ```
 
 Flags: `--width N`, `--theme NAME`, `--color truecolor|256|16|none`, `--ascii`,

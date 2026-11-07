@@ -202,9 +202,29 @@ connect_timeout = 6
 push_timeout = 25
 remote_cache = ""     # the peers' cache dir if it is not the default
 badge = ""            # a source whose `badge` fills this host's agents column ("docker" → "12/12")
+shared_panels = []    # the fleet-wide panels every machine shows, in this order (set on the hub;
+                      # it ships the list in its bundle). A peer that sets it uses its own list
+bundle_local = ["drover"]  # local sources whose record is a fleet-wide view: shipped in the bundle
+                      # too, for peers that have no record of their own
+stale_after = 0       # seconds before a peer calls the hub's bundle stale (0 = 7 exchange cycles)
 ```
 
-See [fleet.md](fleet.md).
+See [fleet.md](fleet.md), and [fleet-consistency.md](fleet-consistency.md) for which panels
+belong in `shared_panels` and why. The bundle format is
+[contracts/porchlight-bundle-v2.md](contracts/porchlight-bundle-v2.md).
+
+## [interactive]
+
+`porchlight -i` ([interactive.md](interactive.md)). Read-only unless you say otherwise.
+
+```toml
+[interactive]
+allow_writes = false  # true: actions that change something (mark a todo done, answer an agent)
+                      # are offered, and each still asks y/N first
+run_allow = ["tmux", "ssh", "drover", "ai", "porchlight", "gh", "glab"]  # programs "run" actions may start
+refresh = 30          # seconds between cache rereads while the TUI is open
+ai_command = ["ai"]   # the AI CLI the "a" key hands the selected item to (the question is appended)
+```
 
 ## [identities.*]
 

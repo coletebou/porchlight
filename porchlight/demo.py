@@ -63,6 +63,10 @@ cost_explorer = "daily"
 [sources.azure_auth]
 subscription = "Example development"
 
+[sources.todos]
+
+[sources.knowledge]
+
 [[custom]]
 name = "restic"
 title = "RESTIC"

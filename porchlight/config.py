@@ -49,7 +49,17 @@ DEFAULTS = {
     "alerts": {"ignore": [], "ignore_units": ["motd-news.service"], "peer_max_age": 1800},
     "collector": {"deadline": 50, "workers": 10, "login_refresh": True, "interval": 300, "spawn_gap": 30},
     "fleet": {"peers": [], "order": [], "labels": {}, "ssh_options": [], "connect_timeout": 6, "push_timeout": 25,
-              "remote_cache": "", "badge": ""},
+              "remote_cache": "", "badge": "",
+              # docs/fleet-consistency.md: the panels every machine shows the same way, in this order
+              # (the hub ships the list in its bundle), local sources whose record is a fleet-wide view
+              # (shipped in the bundle as a fallback for peers without their own), and when a peer
+              # calls the hub's bundle stale (seconds; 0 = 7 missed exchanges)
+              "shared_panels": [], "bundle_local": ["drover"], "stale_after": 0},
+    # porchlight -i (docs/interactive.md): read-only unless allow_writes; "run" actions may only
+    # start these programs; how often the TUI rereads the cache (seconds); the AI CLI the
+    # "ask" key hands the selected item to (argv; the question is appended)
+    "interactive": {"allow_writes": False, "run_allow": ["tmux", "ssh", "drover", "ai", "porchlight", "gh", "glab"],
+                    "refresh": 30, "ai_command": ["ai"]},
     "system": {"mounts": [], "mount_labels": {}},
     "services": {"systemd": [], "systemd_user": [], "launchd": [], "auto": True, "optional": [], "remote_login": True},
     "ports": [],
