@@ -54,6 +54,7 @@ DEFAULTS = {
     "command": "",
     "done_command": "",            # actions for command items: {id} is replaced, run under /bin/sh -c
     "exclude_repos": [],           # drop items from these repos (keep work items off a personal box)
+    "exclude_paths": [],           # drop Drover items whose file, checkout or cwd contains one of these (e.g. "/identities/work/")
     "limit": 60,                   # items kept per provider
     "ask_pattern": "",
     "ask_systems": [],
@@ -197,7 +198,7 @@ def p_drover(ctx, cfg):
     states = set(cfg.get("drover_states") or _OPEN_FEATURE)
     out = []
     for f in res.get("features") or []:
-        if not isinstance(f, dict) or f.get("state") not in states:
+        if not isinstance(f, dict) or f.get("state") not in states or _excluded_path(cfg, f):
             continue
         fid = f.get("fid")
         out.append(item("drover", fid, f.get("title"), status=f.get("state"), repo=f.get("repo"),
@@ -206,6 +207,17 @@ def p_drover(ctx, cfg):
                         kind="feature", ref={"fid": fid}, match=f.get("notes") or ""))
     out.sort(key=lambda i: -i["updated"])
     return out
+
+
+def _excluded_path(cfg, row) -> bool:
+    """A Drover row whose file, checkout or cwd contains one of exclude_paths: how another
+    identity's items (work reflections on a personal box) stay off this dashboard whatever
+    their repo is called. The paths are matched here and never stored."""
+    pats = [str(x) for x in cfg.get("exclude_paths") or [] if str(x)]
+    if not pats:
+        return False
+    where = " ".join(str(row.get(k) or "") for k in ("path", "checkout", "cwd", "file", "home"))
+    return any(p in where for p in pats)
 
 
 def p_reflections(ctx, cfg):
@@ -219,7 +231,7 @@ def p_reflections(ctx, cfg):
         raise RuntimeError("reflections.list: %s" % (why or "no answer"))
     out = []
     for r in res.get("items") or []:
-        if not isinstance(r, dict):
+        if not isinstance(r, dict) or _excluded_path(cfg, r):
             continue
         out.append(item("reflections", r.get("id"), r.get("title"), status=r.get("status"), repo=r.get("repo"),
                         prio=r.get("priority") or 5, kind=r.get("kind"), labels=r.get("tags") or [],

@@ -383,6 +383,21 @@ class DroverProviders(Base):
         self.assertNotIn("SECRETBODY", json.dumps(data))
         self.assertNotIn("_match", data["items"][0])
 
+    def test_exclude_paths_drops_another_identitys_items(self):
+        d = Daemon(**{"reflections.list": {"items": [
+            {"id": "w-1", "title": "Work thing", "repo": "merge-party", "path": "/h/.df/identities/work/claude/memory/x/r.jsonl"},
+            {"id": "w-2", "title": "Work cwd", "repo": "x", "cwd": "/h/work/identities/work/checkout"},
+            {"id": "p-1", "title": "Mine", "repo": "x", "path": "/h/.df/identities/personal/claude/memory/x/r.jsonl"}]},
+                      "events.state": {"features": [
+                          {"fid": "f-w", "title": "W", "state": "in-progress", "checkout": "/a/identities/work/b"},
+                          {"fid": "f-p", "title": "P", "state": "in-progress"}]}})
+        cfg = 'exclude_paths = ["/identities/work/"]'
+        self.assertEqual([i["id"] for i in self.prov("reflections", cfg, http=d)], ["p-1"])
+        self.assertEqual([i["id"] for i in self.prov("drover", cfg, http=d)], ["f-p"])
+        data = self.run_src('reflections = true\n' + cfg, http=d)
+        self.assertNotIn("identities/", json.dumps(data))  # matched, never stored
+        self.assertEqual(len(self.prov("reflections", http=d)), 3)  # off by default
+
     def test_reflection_kinds_and_limit_settings(self):
         d = Daemon(**{"reflections.list": {"items": []}})
         self.prov("reflections", 'reflections_kinds = ["action"]\nlimit = 5', http=d)
