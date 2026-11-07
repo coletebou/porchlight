@@ -105,3 +105,36 @@ without a daemon shows nothing. When only the hub runs Drover, set `scope =
 Deliberately not alerts: a daemon that does not answer (shown, dimmed), sessions
 that finished or crashed (shown in the panel), daemons that need a restart (the
 panel turns amber), an unavailable credential-pool entry.
+
+## Items and actions (`porchlight -i`)
+
+Every waiting, working, finished and crashed session is also a selectable Item,
+with whichever of these its data allows:
+
+| Action | Key | When | What it runs |
+| --- | --- | --- | --- |
+| jump | `s` | the daemon gave a tmux target | `tmux attach` (or `switch-client` when `porchlight -i` itself is running inside tmux) for a session on this machine; `ssh -t <host> tmux attach -t <target>` for one on another host, only when the host string passes a strict whitelist (Drover's own ssh-alias rule, `web/core/hosts.js` `HOST_RE`, tightened here to also forbid a leading `-`, which `ssh` would otherwise read as another option) |
+| transcript | `t` | a session id is known | `drover transcript <id> --brief` (`--host <host>` added for a remote session), waits for Enter before redrawing |
+| answer | `m` | **waiting only** | a line of text, delivered with `sessions.message`; see below |
+| copy | `c` | a session id is known | the id, to the clipboard |
+
+A tmux target is only ever used when it matches Drover's own strict whitelist
+(`web/core/tmux.js` `TARGET_RE`) — checked again here even though the source
+already cleans it, because `ssh host cmd...` has the *remote* shell re-join
+`cmd...` into one command line: a target with a space, `;`, `$(...)`, a
+backtick or a quote would reach that remote shell, not just this machine's
+argv, so it must be as clean as text inside an actual shell command. A record
+from an older porchlight, or one a daemon answered without these fields, has
+no `id` or `tmux` and so offers no actions at all — the text rows are
+unaffected either way.
+
+### Answering a waiting session
+
+`answer` asks for one line of text (`porchlight -i`'s own `input` prompt) and
+a yes/no confirmation, then sends it with the Drover op that delivers a
+message into a live session (`sessions.message`), to the right host when the
+session is not on this machine. Like every write action it is refused unless
+`[interactive] allow_writes = true`, is always confirmed first, and loads the
+Drover **main** token fresh each time it runs (`sessions.message` is not on
+the read-only widget token's scope — see Tokens and text, above). The result
+is masked the same way everything else here is.

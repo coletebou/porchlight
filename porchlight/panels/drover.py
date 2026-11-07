@@ -8,10 +8,26 @@ it left out ("+3"), and a question wraps onto a second line between words.
 """
 from __future__ import annotations
 
+import os
+import re
+import shlex
+
 from .. import core, theme as T
-from ..ui import SEP, Panel, fitted, kv, panel, wrap
+from ..ui import SEP, Action, Item, Panel, fitted, kv, panel, wrap
 
 W = 9                 # the label column
+# Drover's own ssh-alias whitelist (web/core/hosts.js HOST_RE), tightened to forbid a leading
+# "-": `ssh -t <host> ...` takes host positionally, so a value starting with "-" could be read
+# as another ssh option (e.g. a ProxyCommand) rather than a destination. A real ssh alias or
+# hostname never starts with "-" anyway.
+_HOST_OK = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")
+# Drover's own tmux target whitelist (web/core/tmux.js TARGET_RE). Re-checked here even though
+# sources/drover.py already cleans it: a cached record from an older porchlight, or demo data,
+# is trusted only as far as this regex, never blindly. SSH joins a remote command's argv back
+# into one string for the remote shell, so a target reaching the ssh+tmux branch below must be
+# just as clean as a target used inside an actual shell command, not merely "not a shell string
+# on this end" — no space, `;`, `$(...)`, backtick or quote can ever pass this.
+_TARGET_OK = re.compile(r"^=?[A-Za-z0-9_.@%:$+-]{1,120}$")
 SHOWN_WAITING = 3
 SHOWN_DONE = 3
 SHOWN_CRASHED = 2
@@ -202,6 +218,107 @@ def _pool(x, d, room):
     return kv("pool", line, W)
 
 
+# ── Items and actions (porchlight -i): jump, transcript, answer ─────────────
+def _jump_argv(host_raw: str, target: str):
+    """argv for "jump to this session", local or remote; None when there is nothing to
+    jump to (no tmux target) or the host or target string fails its whitelist."""
+    if not target or not _TARGET_OK.match(target):
+        return None
+    if not host_raw or host_raw == "local":
+        return ["tmux", "switch-client" if os.environ.get("TMUX") else "attach", "-t", target]
+    if not _HOST_OK.match(host_raw):
+        return None
+    # ssh joins the remote argv into one string for the remote shell, and a tmux target may
+    # hold "$" (a session id is "$3"): quote it so that shell passes it through unexpanded.
+    return ["ssh", "-t", host_raw, "tmux", "attach", "-t", shlex.quote(target)]
+
+
+def _transcript_argv(sid: str, host_raw: str):
+    """argv for "read this session's transcript"; None without a session id."""
+    if not sid:
+        return None
+    argv = ["drover", "transcript", sid, "--brief"]
+    if host_raw and host_raw != "local" and _HOST_OK.match(host_raw):
+        argv += ["--host", host_raw]
+    return argv
+
+
+def _entry_actions(host_raw: str, sid: str, target: str, *, answer=False, name="") -> list:
+    acts = []
+    jump = _jump_argv(host_raw, target)
+    if jump:
+        acts.append(Action("run", "jump", "s", {"argv": jump}))
+    ts = _transcript_argv(sid, host_raw)
+    if ts:
+        acts.append(Action("run", "transcript", "t", {"argv": ts, "pause": True}))
+    if answer and sid:
+        who = name or "this session"
+        acts.append(Action("drover.answer", "answer", "m", {"id": sid, "host": host_raw or "local",
+                                                              "input": "Reply to %s" % who},
+                            writes=True, confirm="Send this reply to %s?" % who))
+    if sid:
+        acts.append(Action("copy", "copy id", "c", {"text": sid}))
+    return acts
+
+
+def _entry_item(host_raw: str, sid: str, text: str, level: str, detail: list, *, target="",
+                 answer=False, name="") -> Item:
+    return Item("drover:%s:%s" % (host_raw or "local", sid or "-"), text, detail=detail, level=level,
+                actions=_entry_actions(host_raw, sid, target, answer=answer, name=name))
+
+
+def _waiting_items(x, d) -> list:
+    items = []
+    for w in _l(d.get("waiting")):
+        host_raw, sid, name = _s(w.get("host"), 40), _s(w.get("id"), 24), _s(w.get("name"), 40) or "?"
+        detail = ["host: %s" % _host(x, host_raw or "local"), "engine: %s" % (_s(w.get("engine"), 16) or "?"),
+                   "kind: %s" % (_s(w.get("kind"), 16) or "?"), "since: %s" % _age(w.get("since")),
+                   _s(w.get("ask"), 300)]
+        items.append(_entry_item(host_raw, sid, "%s waiting on %s" % (name, _host(x, host_raw or "local")),
+                                  "warn", detail, target=_s(w.get("tmux"), 120), answer=True, name=name))
+    return items
+
+
+def _working_items(x, d) -> list:
+    items = []
+    for w in _l(d.get("working")):
+        host_raw, sid, name = _s(w.get("host"), 40), _s(w.get("id"), 24), _s(w.get("name"), 40) or "?"
+        detail = ["host: %s" % _host(x, host_raw or "local"), "engine: %s" % (_s(w.get("engine"), 16) or "?")]
+        items.append(_entry_item(host_raw, sid, "%s working on %s" % (name, _host(x, host_raw or "local")),
+                                  "ok", detail, target=_s(w.get("tmux"), 120)))
+    return items
+
+
+def _feed_items(x, d) -> list:
+    """One Item per finished or crashed session the rows above summarize (the same
+    fresh-since-your-last-visit, or last-day/six-hours, selection, not bounded to the
+    handful of rows actually shown)."""
+    seen = x.last_seen or 0
+    done = [f for f in _l(d.get("feed")) if f.get("kind") == "finished"]
+    fresh_done = [f for f in done if seen and _n(f.get("at")) > seen]
+    shown_done = fresh_done or [f for f in done if core.now() - _n(f.get("at")) < 86400]
+    since = core.now() - CRASH_RECENT
+    if seen:
+        since = min(since, seen)
+    errs = [f for f in _l(d.get("feed")) if f.get("kind") == "error" and _n(f.get("at")) > since]
+    items = []
+    for f in shown_done:
+        host_raw, sid, name = _s(f.get("host"), 40), _s(f.get("sid"), 24), _s(f.get("name"), 40) or "?"
+        detail = ["host: %s" % _host(x, host_raw or "local"), "finished %s" % _age(f.get("at")), _s(f.get("text"), 300)]
+        items.append(_entry_item(host_raw, sid, "%s finished on %s" % (name, _host(x, host_raw or "local")),
+                                  "ok", detail, target=_s(f.get("tmux"), 120)))
+    for f in errs:
+        host_raw, sid, name = _s(f.get("host"), 40), _s(f.get("sid"), 24), _s(f.get("name"), 40) or "?"
+        detail = ["host: %s" % _host(x, host_raw or "local"), "crashed %s" % _age(f.get("at")), _s(f.get("what"), 120)]
+        items.append(_entry_item(host_raw, sid, "%s crashed on %s" % (name, _host(x, host_raw or "local")),
+                                  "crit", detail, target=_s(f.get("tmux"), 120)))
+    return items
+
+
+def _drover_items(x, d) -> list:
+    return _waiting_items(x, d) + _working_items(x, d) + _feed_items(x, d)
+
+
 @panel("drover", title="DROVER")
 def p_drover(x):
     d = x.data("drover")
@@ -213,7 +330,8 @@ def p_drover(x):
         why = _s(d.get("why"), 30) or "no answer"
         row = T.dot("unknown") + T.dim(" daemon not answering (%s)" % why)
         hint = SEP + T.c("drover serve", "sky")
-        return Panel("drover", "DROVER", [row + (hint if T.width(row + hint) <= x.cw - 1 else "")], "unknown", stale)
+        return Panel("drover", "DROVER", [row + (hint if T.width(row + hint) <= x.cw - 1 else "")], "unknown", stale,
+                     items=_drover_items(x, d))
     rows, lvl = [], "ok"
     waiting = _waiting(x, d, room)
     if waiting:
@@ -229,4 +347,4 @@ def p_drover(x):
     parts = ["%d host%s" % (hosts, "" if hosts == 1 else "s") if hosts else "", "%d working" % busy if busy else "",
              "%d idle" % idle if idle else ""]
     note = stale or fitted([p for p in parts if p], x.cw - 16)  # the title, its mark and a stretch of rule
-    return Panel("drover", "DROVER", rows, lvl, T.strip(note))
+    return Panel("drover", "DROVER", rows, lvl, T.strip(note), items=_drover_items(x, d))

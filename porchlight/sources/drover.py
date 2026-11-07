@@ -30,6 +30,7 @@ import os
 import re
 
 from .. import core, secrets
+from ..actions import Result, action
 from ..registry import source
 
 DEFAULT_STATE = "~/.local/state/drover"
@@ -44,6 +45,9 @@ _FEED_TITLE = re.compile(r"^(.*?)\s+(finished|exited unexpectedly|exited with co
                          r"hit an error|failed|errored)$", re.I)
 _CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 _ID = re.compile(r"[^A-Za-z0-9._-]")
+# Drover's own tmux target whitelist (web/core/tmux.js TARGET_RE): never a shell string, this
+# travels in argv only, but a cached record from another version may hold anything.
+_TMUX_TARGET = re.compile(r"^=?[A-Za-z0-9_.@%:$+-]{1,120}$")
 
 
 def text(v, n: int = 140) -> str:
@@ -57,6 +61,13 @@ def text(v, n: int = 140) -> str:
 
 def short_id(v) -> str:
     return _ID.sub("", str(v or ""))[:12]
+
+
+def tmux_target(v) -> str:
+    """A tmux target Drover gave us (`<session>:@<window>.%<pane>` or similar), kept only
+    when it is already a string and matches Drover's own strict whitelist; "" otherwise
+    (no jump action, never a guess, never a stringified number or bool passed through)."""
+    return v if isinstance(v, str) and v and _TMUX_TARGET.match(v) else ""
 
 
 def session_name(item) -> str:
@@ -141,10 +152,12 @@ def summary(res) -> dict:
     tot = res.get("totals") if isinstance(res.get("totals"), dict) else {}
     mgr = res.get("manager") if isinstance(res.get("manager"), dict) else {}
     return {
-        "waiting": [{"name": session_name(w), "host": _host(w.get("host")), "engine": text(w.get("engine"), 16),
-                     "kind": text(w.get("kind"), 16), "since": _when(w.get("since")),
-                     "ask": ask_of(w)} for w in _dicts(res.get("waiting"), WAITING_KEEP)],
-        "working": [{"name": session_name(w), "host": _host(w.get("host")), "engine": text(w.get("engine"), 16)}
+        "waiting": [{"id": short_id(w.get("id")), "name": session_name(w), "host": _host(w.get("host")),
+                     "engine": text(w.get("engine"), 16), "kind": text(w.get("kind"), 16),
+                     "since": _when(w.get("since")), "ask": ask_of(w), "tmux": tmux_target(w.get("tmux"))}
+                    for w in _dicts(res.get("waiting"), WAITING_KEEP)],
+        "working": [{"id": short_id(w.get("id")), "name": session_name(w), "host": _host(w.get("host")),
+                     "engine": text(w.get("engine"), 16), "tmux": tmux_target(w.get("tmux"))}
                     for w in _dicts(res.get("working"), WORKING_KEEP)],
         "hosts": [{"name": _host(h.get("name")), "up": h.get("up") is not False, "waiting": _int(h.get("waiting")),
                    "working": _int(h.get("working")), "idle": _int(h.get("idle"))}
@@ -177,7 +190,7 @@ def feed(ctx, url: str, tok: str, prev: dict) -> tuple:
         items.append({"at": _when(it.get("at")), "kind": kind, "host": _host(it.get("host")),
                       "name": name[:40] or "?", "what": what[:40],
                       "text": "" if kind == "error" else text(it.get("body")),  # an error's body is a path or an ssh error
-                      "sid": short_id(it.get("sessionId")) or name[:24]})
+                      "sid": short_id(it.get("sessionId")) or name[:24], "tmux": tmux_target(it.get("tmux"))})
     latest = {}
     for i in items:
         key = (i.get("sid"), i.get("kind"))
@@ -286,3 +299,37 @@ def drover(ctx):
     if data["waiting"]:
         data["alerts"] = [{"sev": "warn", "msg": waiting_alert(data["waiting"], total, ctx.host.label)}]
     return data
+
+
+# ── Write handler (porchlight -i only; see actions.py policy) ───────────────
+@action("drover.answer", writes=True)
+def drover_answer(host, args):
+    """Send a text reply to a session waiting on Drover (sessions.message): the daemon
+    routes it to the right host by name. The main token only (not on the widget token's
+    scope); loaded fresh from find_daemon() each time this runs."""
+    import os
+
+    from .. import registry
+
+    sid = short_id(args.get("id"))
+    msg = str(args.get("text") or "").strip()
+    if not sid:
+        return Result(False, "no session id")
+    if not msg:
+        return Result(False, "nothing to send")
+    src = registry.SOURCES.get("drover")
+    cfg = src.config(host) if src else {}
+    url, main, _widget = find_daemon(cfg, os.environ)
+    if not url:
+        return Result(False, "no Drover daemon on this machine")
+    if not main:
+        return Result(False, "no Drover main token: set [interactive] allow_writes and check the state dir")
+    ctx = registry.Ctx(host, dict(os.environ), None, cfg)
+    op_args = {"id": sid, "text": msg}
+    where = str(args.get("host") or "").strip()
+    if where and where != "local":
+        op_args["host"] = where
+    res, why = op(ctx, url, main, "sessions.message", op_args, timeout=15.0)
+    if res is None:
+        return Result(False, why or "failed")
+    return Result(True, "sent to " + sid, refresh=("drover",))

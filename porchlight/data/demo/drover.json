@@ -5,16 +5,17 @@
     "here": "atlas",
     "waiting": [
       {"name": "demo-review", "host": "local", "engine": "claude", "kind": "question", "since": "-420",
-       "ask": "Push the branch now, or wait for the second review?"},
+       "ask": "Push the branch now, or wait for the second review?", "id": "wr-review001", "tmux": "demo:@1.%1"},
       {"name": "demo-migrate", "host": "gpu-box", "engine": "codex", "kind": "decision", "since": "-95",
-       "ask": "Run the migration on the staging database? 1. Yes / 2. Yes, and do not ask again / 3. No"}
+       "ask": "Run the migration on the staging database? 1. Yes / 2. Yes, and do not ask again / 3. No",
+       "id": "wr-migrat002", "tmux": "demo:@2.%1"}
     ],
     "working": [
-      {"name": "demo-tests", "host": "local", "engine": "codex"},
-      {"name": "demo-api", "host": "local", "engine": "claude"},
-      {"name": "#5ffd86aa", "host": "local", "engine": "claude"},
-      {"name": "demo-train", "host": "gpu-box", "engine": "claude"},
-      {"name": "demo-lint", "host": "web-1", "engine": "claude"}
+      {"name": "demo-tests", "host": "local", "engine": "codex", "id": "wk-tests0001", "tmux": "demo:@3.%1"},
+      {"name": "demo-api", "host": "local", "engine": "claude", "id": "wk-api00001", "tmux": "demo:@4.%1"},
+      {"name": "#5ffd86aa", "host": "local", "engine": "claude", "id": "5ffd86aa-1111-4000-8000-000000000002"},
+      {"name": "demo-train", "host": "gpu-box", "engine": "claude", "id": "wk-train0001", "tmux": "demo:@6.%1"},
+      {"name": "demo-lint", "host": "web-1", "engine": "claude", "id": "wk-lint00001"}
     ],
     "hosts": [
       {"name": "local", "up": true, "waiting": 1, "working": 3, "idle": 2},
@@ -27,7 +28,7 @@
       {"at": "-720", "kind": "finished", "host": "web-1", "name": "demo-docs", "what": "finished",
        "text": "Done: the README section is written and all 12 tests pass.", "sid": "s-demo-docs"},
       {"at": "-2400", "kind": "finished", "host": "local", "name": "demo-build", "what": "finished",
-       "text": "Pushed 3 commits to origin/main; CI is green.", "sid": "s-demo-build"},
+       "text": "Pushed 3 commits to origin/main; CI is green.", "sid": "s-demo-build", "tmux": "demo:@7.%1"},
       {"at": "-5400", "kind": "error", "host": "gpu-box", "name": "demo-bench", "what": "exited unexpectedly", "text": "",
        "sid": "s-demo-bench"},
       {"at": "-19800", "kind": "finished", "host": "local", "name": "demo-refactor", "what": "finished",
