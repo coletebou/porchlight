@@ -24,6 +24,8 @@ All notable changes to this project are documented here. The format follows
   peers of the same identity show them after their own panels. The footer
   names the view and its age, a warning fires when the hub stops pushing
   (`stale_after`), and doctor says where the view comes from.
+- An AI CHATS panel and `ai_chats` source: ai-cli's saved chats from
+  `ai sessions --json` (metadata only), when `ai` is installed.
 - `exclude_repos` globs and `exclude_paths`, to keep another identity's
   Drover items off a dashboard.
 - Opt-in GCP and Azure account checks in ACCESS, using the existing CLI logins

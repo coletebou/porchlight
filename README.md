@@ -71,6 +71,7 @@ git clone https://github.com/coletebou/porchlight ~/.local/share/porchlight
 | **TODOS** | open items from todo.txt files, a GitHub issue search, Drover features and reflections, Badland and any command, in one cached list; ask coverage (which systems each ask id is in); `porchlight todos done` writes back, opt-in ([docs/todos.md](docs/todos.md)) |
 | **KNOWLEDGE** | the shared brain's health and latest decisions, the search index, reflections per repo, your note folders and wiki links ([docs/knowledge.md](docs/knowledge.md)) |
 | **AI LIMITS** | Claude, Codex, Cursor and Grok plan windows (5 h / 7 d / per model) with reset times and credits, read-only |
+| **AI CHATS** | [ai-cli](https://github.com/coletebou/ai-cli)'s saved chats (names, models, turns, age; never a message) from `ai sessions --json`; `A` in `porchlight -i` opens its TUI ([docs/ai-cli.md](docs/ai-cli.md)) |
 | **DOCKER** | compose stacks up/total, unhealthy, restarting, recent crashes (not clean exits or deliberate stops), expected containers missing |
 | **PULL REQUESTS** | yours and those awaiting your review on GitHub, GitLab, Gitea, Forgejo and Bitbucket Cloud: conflicts, approvals, changes requested, CI where available |
 | **FLEET** | every machine's load, memory, swap, disk, agents and alerts, offline detection that ignores Tailscale's flapping bit |
