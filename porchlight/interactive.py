@@ -46,6 +46,11 @@ HELP = [
 ]
 
 
+def accent():
+    """The theme's accent as one color (T.ACCENT is the gradient the panel titles use)."""
+    return T.gradient(T.ACCENT, 0.15)
+
+
 # ── terminal ──────────────────────────────────────────────────────────────────
 class Term:
     """Raw keys on the alternate screen; everything restored on exit, even on an exception."""
@@ -219,7 +224,7 @@ class App:
     def top_line(self, W) -> str:
         nc = sum(1 for a in self.al if a["sev"] == "crit")
         nw = sum(1 for a in self.al if a["sev"] == "warn")
-        parts = [T.c("porchlight", T.ACCENT, bold=True), T.c(self.host.label, "fg", bold=True)]
+        parts = [T.c("porchlight", accent(), bold=True), T.c(self.host.label, "fg", bold=True)]
         if nc:
             parts.append(T.c("%s%d" % (T.g("crit"), nc), "red"))
         if nw:
@@ -254,7 +259,7 @@ class App:
             label = name + (T.dim(" %d" % count) if count else "")
             line = mark + " " + label
             if n == self.pi:
-                line = T.c("▶", T.ACCENT, bold=True) + " " + T.c(name, "fg", bold=True) + (T.dim(" %d" % count) if count else "")
+                line = T.c("▶", accent(), bold=True) + " " + T.c(name, "fg", bold=True) + (T.dim(" %d" % count) if count else "")
             out.append(line)
         start = max(0, self.pi - h + 2) if self.pi >= h - 1 else 0
         return out[start:start + h]
@@ -294,7 +299,7 @@ class App:
         for n, it in enumerate(its[start:start + room], start):
             text = str(it.get("text") or "")
             if n == self.ii and self.focus == "items":
-                rows.append(T.c("▶ ", T.ACCENT, bold=True) + T.fit(text, w - 2))
+                rows.append(T.c("▶ ", accent(), bold=True) + T.fit(text, w - 2))
             else:
                 rows.append("  " + T.fit(text, w - 2))
         return head + rows
@@ -582,6 +587,13 @@ def search(host, query: str, http=None) -> list:
     ctx = Ctx(host, env, {})
     if http:
         ctx.http = http
+    from .sources import todos as S
+    tcfg = host.cfg.source("todos", S.DEFAULTS)
+
+    def excluded(r):  # the todos source's exclude_repos / exclude_paths hold for search hits too
+        repo = str(r.get("repo") or "").lower()
+        return repo in {str(x).lower() for x in tcfg.get("exclude_repos") or []} or S._excluded_path(tcfg, r)
+
     out = []
     for op, args, label in (("brain.search", {"query": query, "limit": 8}, "BRAIN"),
                             ("reflections.search", {"query": query, "limit": 8}, "REFLECTIONS")):
@@ -592,7 +604,7 @@ def search(host, query: str, http=None) -> list:
         if res is None:
             out.append(T.dim("  %s" % (why or "no answer")))
         for r in rows[:8]:
-            if not isinstance(r, dict):
+            if not isinstance(r, dict) or excluded(r):
                 continue
             title = D.text(r.get("title") or r.get("name") or r.get("snippet") or r.get("id"), 160)
             meta = " ".join(D.text(r.get(k), 30) for k in ("kind", "repo", "status", "namespace") if r.get(k))
