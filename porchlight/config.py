@@ -41,7 +41,7 @@ DEFAULTS = {
         "attention": 10, "attention_compact": 5,
     },
     "header": {"weather": True, "ips": True, "last_visit": True, "user": False},
-    "footer": {"quote": True, "qotd": True, "hints": True, "timing": True, "quotes_file": "", "qotd_file": ""},
+    "footer": {"quote": True, "qotd": True, "hints": True, "timing": True, "fleet_view": True, "quotes_file": "", "qotd_file": ""},
     "thresholds": {
         "disk_warn": 85, "disk_crit": 92, "mem_warn": 92, "mem_crit": 98,
         "swap_warn": 80, "swap_crit": 95, "load_warn": 1.0, "load_crit": 2.0,

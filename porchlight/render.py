@@ -333,6 +333,24 @@ def qotd(host) -> str:
     return lines[datetime.date.today().toordinal() % len(lines)]
 
 
+def fleet_view(host, cache) -> str:
+    """'fleet view hub 3m' on a peer that renders the hub's bundle: where the shared part
+    of the screen comes from and how old it is (amber once older than fleet.stale_after)."""
+    if host.hub:
+        return ""
+    b = cache.bundle if isinstance(cache.bundle, dict) else {}
+    try:
+        ts = float(b.get("ts") or 0)
+    except (TypeError, ValueError):
+        ts = 0.0
+    if not ts:
+        return ""
+    age = max(0.0, core.now() - ts)
+    stale = float(host.cfg.get("fleet.stale_after", 900) or 0)
+    text = "fleet view %s %s" % (str(b.get("label") or b.get("from") or "hub")[:24], core.human_age(age))
+    return T.c(text, "amber") if stale and age > stale else T.dim(text)
+
+
 def footer(host, cache, W, t0) -> list:
     fc = host.cfg.table("footer")
     out = []
@@ -349,6 +367,9 @@ def footer(host, cache, W, t0) -> list:
         left = T.dim("porchlight ") + T.dim(" · ").join(T.c(cmd, "slate") for cmd in tuple(host.hints) + ("-h",))
     if fc.get("timing", True):
         right = T.dim("rendered %dms" % int((time.monotonic() - t0) * 1000))
+    view = fleet_view(host, cache)
+    if view and fc.get("fleet_view", True):
+        right = view + (T.dim(" · ") + right if right else "")
     if left or right:
         gap = W - 1 - T.width(left) - T.width(right)
         out.append(" " + T.fit(left + (" " * gap + right if gap > 2 else ""), W - 1))
