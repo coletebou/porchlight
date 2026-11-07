@@ -15,6 +15,7 @@ keys, ANSI for drawing (the panels are already ANSI strings, which curses cannot
 from __future__ import annotations
 
 import os
+import re
 import select
 import shutil
 import subprocess
@@ -153,7 +154,7 @@ class App:
         self.host = host
         self.term = term
         self.opener = opener or open_url
-        self.runner = runner or subprocess.call
+        self.runner = runner or run_foreground
         self.panels, self.al, self.cache = [], [], None
         self.pi = 0            # selected panel
         self.ii = 0            # selected item
@@ -513,6 +514,18 @@ class App:
 
 
 # ── helpers with side effects ────────────────────────────────────────────────
+def run_foreground(argv) -> int:
+    """Run a full-screen program and wait for it. Ctrl-C belongs to the program: the terminal
+    delivers SIGINT to porchlight too, which keeps waiting instead of killing the child
+    (subprocess.call would) and quitting."""
+    p = subprocess.Popen(argv)
+    while True:
+        try:
+            return p.wait()
+        except KeyboardInterrupt:
+            continue
+
+
 def programs(host) -> dict:
     """The full-screen programs by key: the built-ins, then [interactive] programs over them.
     Keys the dashboard already uses for itself cannot be taken."""
@@ -559,6 +572,8 @@ def attach_argv(host, raw, http=None):
     if http:
         ctx.http = http
     where = str(raw.get("host") or "local")
+    if where.startswith("-") or not re.match(r"^[A-Za-z0-9._@:-]+$", where):
+        return None, "refusing an odd host name from Drover: %s" % D.text(where, 40)  # never an ssh option
     args = {} if where == "local" else {"host": where}
     res, why = D.op(ctx, url, main, "sessions.list", args, timeout=8)
     if res is None:
@@ -573,7 +588,8 @@ def attach_argv(host, raw, http=None):
         if os.environ.get("TMUX"):
             return ["tmux", "switch-client", "-t", win], None
         return ["tmux", "attach", "-t", win], None
-    return ["ssh", "-t", where, "tmux", "attach", "-t", win], None
+    import shlex  # ssh hands the remote shell one string: quote the target, never trust its characters
+    return ["ssh", "-t", "--", where, "tmux attach -t %s" % shlex.quote(win)], None
 
 
 def search(host, query: str, http=None) -> list:

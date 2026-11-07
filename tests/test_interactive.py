@@ -479,7 +479,20 @@ class AttachArgv(unittest.TestCase):
             fake = FakeHTTP({"op/sessions.list": resp(200, {"ok": True, "result": [{"id": "sess1", "tmux": "mysess:1.0"}]})})
             argv, why = interactive.attach_argv(h, {"id": "sess1", "host": "remotebox"}, http=fake)
             self.assertIsNone(why)
-            self.assertEqual(argv, ["ssh", "-t", "remotebox", "tmux", "attach", "-t", "mysess:1"])
+            # one remote command string, the target shell-quoted, "--" before the host
+            self.assertEqual(argv, ["ssh", "-t", "--", "remotebox", "tmux attach -t mysess:1"])
+
+    def test_remote_target_is_quoted_and_odd_hosts_are_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            self._state(d)
+            h = self._host(d)
+            fake = FakeHTTP({"op/sessions.list": resp(200, {"ok": True, "result": [{"id": "s", "tmux": "my proj;rm -rf x:1.0"}]})})
+            argv, why = interactive.attach_argv(h, {"id": "s", "host": "remotebox"}, http=fake)
+            self.assertEqual(argv[-1], "tmux attach -t 'my proj;rm -rf x:1'")
+            for bad in ("-oProxyCommand=touch /tmp/x", "box name", "box;id"):
+                argv, why = interactive.attach_argv(h, {"id": "s", "host": bad}, http=fake)
+                self.assertIsNone(argv, bad)
+                self.assertIn("odd host name", why)
 
     def test_no_tmux_pane_gives_a_reason(self):
         with tempfile.TemporaryDirectory() as d:
@@ -733,6 +746,23 @@ class PlainDashboard(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertIn("rc 0", p.stdout)
         self.assertIn("clean True", p.stdout)
+
+
+
+class Foreground(unittest.TestCase):
+    def test_ctrl_c_while_a_program_runs_does_not_kill_it_or_porchlight(self):
+        calls = {"n": 0}
+
+        class P:
+            def wait(self):
+                calls["n"] += 1
+                if calls["n"] == 1:
+                    raise KeyboardInterrupt  # the terminal's SIGINT reached porchlight too
+                return 0
+
+        with mock.patch.object(interactive.subprocess, "Popen", lambda argv: P()):
+            self.assertEqual(interactive.run_foreground(["prog"]), 0)
+        self.assertEqual(calls["n"], 2)
 
 
 if __name__ == "__main__":
