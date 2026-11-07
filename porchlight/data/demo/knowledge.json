@@ -1,0 +1,31 @@
+{
+  "_comment": "A fictional brain, reflections and wikis for the demo (porchlight demo -i). Times written as \"+N\" / \"-N\" are seconds from the moment the demo loads.",
+  "knowledge": {
+    "v": 1,
+    "brain": {
+      "name": "brain", "ok": true, "error": "", "ms": 180, "entries": 1840, "stale": false,
+      "recent": [
+        {"id": "demo-6c1f9a", "title": "voice gateway: AEC decision", "kind": "decision", "created": "-900",
+         "url": "https://example.com/brain/demo-6c1f9a"},
+        {"id": "demo-27ae40", "title": "gpu-box: GPU 0 runs hot under sustained load", "kind": "memory", "created": "-4200", "url": ""},
+        {"id": "demo-9b21cd", "title": "atlas: nightly backup window moved to 02:00", "kind": "decision", "created": "-91000", "url": ""}
+      ],
+      "web_url": "https://example.com/brain"
+    },
+    "reflections": {
+      "ok": true, "error": "", "open": 9, "by_kind": {"action": 6, "question": 3},
+      "recent": [
+        {"id": "demo-r12", "title": "Decide the staging rollout window", "kind": "action", "host": "atlas", "created": "-1800"},
+        {"id": "demo-r13", "title": "Should the retry budget double for the gpu-box queue?", "kind": "question", "host": "gpu-box",
+         "created": "-5400"}
+      ]
+    },
+    "wikis": [
+      {"name": "docs", "url": "https://example.com/docs/wiki", "ok": true, "error": "", "pages": 42,
+       "recent": [{"title": "Runbook", "path": "Runbook.md", "mtime": "-7200"},
+                  {"title": "On call", "path": "On-call.md", "mtime": "-54000"}]}
+    ],
+    "links": [{"label": "Dashboard", "url": "https://example.com/dashboard"},
+              {"label": "Status", "url": "https://example.com/status"}]
+  }
+}

@@ -53,6 +53,11 @@ absent from the record; a part that fails reports `ok: false` and a short
 - Titles are one line, control characters removed, token shapes masked
   (`secrets.mask_shapes`), at most 160 characters. No entry bodies are stored:
   the record is a pointer list, not a copy of the brain.
+- Ids (`brain.recent[].id`, `reflections.recent[].id`) are not run through
+  `mask_shapes`: a real brain slug is a long, readable, hyphenated string, the
+  very shape its 40-plus-character rule redacts, which would break "copy id".
+  They are control-character-stripped, length-bounded, and masked for known
+  token prefixes and URI credentials only (`secrets.mask` with no environment).
 - `brain.recent`: newest first, at most `brain_recent`.
 - `wikis[].recent`: the 3 most recently modified pages under `path` (Markdown
   files, `.git` skipped, at most 5000 files walked); `pages` counts them.
