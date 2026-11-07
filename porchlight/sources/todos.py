@@ -123,8 +123,14 @@ def p_files(ctx, cfg):
             labels = re.findall(r"(?:^|\s)[+@]([\w.-]+)", title)
             out.append(item("files", hashlib.sha1(s.encode("utf-8")).hexdigest()[:10], title, prio=prio,
                             due=(due.group(1) + "T00:00:00Z") if due else 0, labels=labels,
-                            ref={"path": str(path), "line": s}))
+                            ref={"path": str(path), "sha": _line_sha(s)}))
     return out
+
+
+def _line_sha(s: str) -> str:
+    """The identity of a todo.txt line: the record keeps this, never the line itself (a
+    line can hold anything, a token included, and the record travels to every peer)."""
+    return hashlib.sha256(s.strip().encode("utf-8")).hexdigest()
 
 
 def _gh_token(env, cfg=None) -> str:
@@ -416,6 +422,8 @@ def act(host, it: dict, verb: str, env=None, runner=None, http=None) -> str:
     prov = it.get("provider")
     if prov == "files":
         return _done_file(ref)
+    if prov == "github" and it.get("kind") == "pr":
+        raise ActionError("%s is a pull request: merge or close it on GitHub, porchlight will not close it" % it.get("id"))
     if prov == "github":
         tok = _gh_token(env, cfg)
         repo, num = ref.get("repo"), ref.get("number")
@@ -450,6 +458,8 @@ def act(host, it: dict, verb: str, env=None, runner=None, http=None) -> str:
         return "marked %s done in Drover" % it.get("id")
     if prov == "badland":
         return _done_badland(ctx, cfg, env, ref.get("id"))
+    if prov == "command" and not str(ref.get("id") or "").strip():
+        raise ActionError("this command item has no id, so done_command cannot name it (give items an \"id\")")
     if prov == "command":
         tmpl = str(cfg.get("done_command") or "")
         if not tmpl:
@@ -464,23 +474,35 @@ def act(host, it: dict, verb: str, env=None, runner=None, http=None) -> str:
 
 
 def _done_file(ref) -> str:
-    path, line = core.expand(str(ref.get("path") or "")), str(ref.get("line") or "")
+    """Mark the line done in place. The file behind a symlink is the one rewritten (the link
+    stays a link), atomically and with its mode; any OS error is an ActionError."""
+    path = os.path.realpath(core.expand(str(ref.get("path") or "")))
+    want = str(ref.get("sha") or "")
+    legacy = str(ref.get("line") or "")  # records written before the line was hashed
     try:
         with open(path, encoding="utf-8") as f:
             lines = f.read().split("\n")
     except OSError as e:
         raise ActionError("%s: %s" % (ref.get("path"), e.strerror)) from None
     for n, ln in enumerate(lines):
-        if ln.strip() == line:
-            lines[n] = ln[: len(ln) - len(ln.lstrip())] + "x %s %s" % (time.strftime("%Y-%m-%d"), line)
+        s = ln.strip()
+        if s and not s.startswith("x ") and ((want and _line_sha(s) == want) or (legacy and s == legacy)):
+            lines[n] = ln[: len(ln) - len(ln.lstrip())] + "x %s %s" % (time.strftime("%Y-%m-%d"), s)
             tmp = path + ".porchlight.tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                f.write("\n".join(lines))
             try:
-                os.chmod(tmp, os.stat(path).st_mode & 0o7777)
-            except OSError:
-                pass
-            os.replace(tmp, path)
+                with open(tmp, "w", encoding="utf-8") as f:
+                    f.write("\n".join(lines))
+                try:
+                    os.chmod(tmp, os.stat(path).st_mode & 0o7777)
+                except OSError:
+                    pass
+                os.replace(tmp, path)
+            except OSError as e:
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+                raise ActionError("%s: %s" % (ref.get("path"), e.strerror or e)) from None
             return "marked done in %s" % ref.get("path")
     raise ActionError("the line is no longer in %s" % ref.get("path"))
 

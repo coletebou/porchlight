@@ -179,9 +179,11 @@ class Files(Base):
         self.assertEqual(got["indented one +work"]["labels"], ["work"])
         self.assertEqual(got["plain item"]["due"], 0)
 
-    def test_the_ref_line_is_the_stripped_line_and_the_key_is_stable(self):
+    def test_the_ref_is_a_hash_of_the_stripped_line_and_the_key_is_stable(self):
         got, p = self.items()
-        self.assertEqual(got["indented one +work"]["ref"]["line"], "(B) indented one +work")
+        ref = got["indented one +work"]["ref"]
+        self.assertEqual(ref["sha"], S._line_sha("(B) indented one +work"))
+        self.assertNotIn("line", ref)  # the raw line can hold anything; the record travels to every peer
         again, _ = self.items()
         self.assertEqual({i["key"] for i in got.values()}, {i["key"] for i in again.values()})
 
@@ -747,6 +749,63 @@ class Act(Base):
             S.act(self.act_host(), it, "done", env={})
         self.assertIn("no longer in", str(cm.exception))
         self.assertEqual(slurp(p), "one\nedited elsewhere\n")
+
+    def test_files_ref_never_stores_a_token_from_the_line(self):
+        p = self.write("t.txt", "rotate %s now\n" % GHTOK)
+        data = self.run_src(self.files_toml(p))
+        self.assertNotIn(GHTOK, json.dumps(data))
+        S.act(self.act_host(), data["items"][0], "done", env={})
+        self.assertEqual(slurp(p), "x %s rotate %s now\n" % (TODAY, GHTOK))
+
+    def test_files_done_from_a_record_written_before_the_hash(self):
+        p = self.write("t.txt", "old style\n")
+        it = {"provider": "files", "ref": {"path": p, "line": "old style"}}
+        S.act(self.act_host(), it, "done", env={})
+        self.assertEqual(slurp(p), "x %s old style\n" % TODAY)
+
+    def test_files_done_through_a_symlink_keeps_the_link(self):
+        real = self.write("real.txt", "one\ntwo\n")
+        link = os.path.join(self.dir, "link.txt")
+        os.symlink(real, link)
+        it = self.prov("files", self.files_toml(link))[1]
+        S.act(self.act_host(), it, "done", env={})
+        self.assertTrue(os.path.islink(link))
+        self.assertEqual(slurp(real), "one\nx %s two\n" % TODAY)
+
+    def test_files_unwritable_directory_is_an_action_error(self):
+        if os.geteuid() == 0:
+            self.skipTest("root writes anywhere")
+        d = os.path.join(self.dir, "ro")
+        os.makedirs(d)
+        p = os.path.join(d, "t.txt")
+        with open(p, "w") as f:
+            f.write("one\n")
+        it = self.prov("files", self.files_toml(p))[0]
+        os.chmod(d, 0o500)
+        self.addCleanup(os.chmod, d, 0o700)
+        with self.assertRaises(S.ActionError) as cm:
+            S.act(self.act_host(), it, "done", env={})
+        self.assertIn("ermission", str(cm.exception))
+        self.assertEqual(slurp(p), "one\n")
+
+    def test_github_pull_requests_are_never_closed(self):
+        http = FakeHTTP({})
+        it = {"provider": "github", "id": "octo/widgets#12", "kind": "pr", "ref": {"repo": "octo/widgets", "number": 12}}
+        with self.assertRaises(S.ActionError) as cm:
+            S.act(self.act_host(), it, "done", env={"GITHUB_TOKEN": GHTOK}, http=http)
+        self.assertIn("pull request", str(cm.exception))
+        self.assertEqual(http.calls, [])
+        from porchlight.panels import todos as PT
+        self.assertNotIn("done", PT.tui_items([dict(it, url="https://github.com/octo/widgets/pull/12")])[0]["actions"])
+        self.assertIn("done", PT.tui_items([dict(it, kind="issue")])[0]["actions"])
+
+    def test_command_item_without_an_id_is_refused(self):
+        run = Runner((0, "", ""))
+        it = {"provider": "command", "ref": {"id": None}}
+        with self.assertRaises(S.ActionError) as cm:
+            S.act(self.act_host('done_command = "tracker close {id}"'), it, "done", env={}, runner=run)
+        self.assertIn("no id", str(cm.exception))
+        self.assertEqual(run.calls, [])
 
     def test_files_missing_file_is_an_action_error(self):
         it = {"provider": "files", "ref": {"path": os.path.join(self.dir, "gone.txt"), "line": "x"}}

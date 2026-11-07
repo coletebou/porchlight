@@ -51,6 +51,20 @@ class Source(unittest.TestCase):
         self.assertEqual(d["skipped"], 1)
         self.assertNotIn("x" * 40, json.dumps(d))
 
+    def test_escape_sequences_never_reach_the_terminal(self):
+        evil = "hi\x1b]2;PWNED\x07\x1b[2J"
+        d = self.run_src(Runner(out=json.dumps({"version": 1, "sessions": [{"name": evil, "providers": ["x\x1b[31m"]}]})))
+        self.assertNotIn("\x1b", json.dumps(d, ensure_ascii=False))
+        self.assertNotIn("\x07", json.dumps(d, ensure_ascii=False))
+        # and a record that holds them anyway (an old version, a hand edit) is cleaned at render
+        put("ai_chats", {"sessions": [{"name": evil, "providers": ["p\x1b[2J"], "updated": 0}]})
+        p = BUILDERS["ai_chats"](RCtx(host(""), registry.Cache(), {"vitals": {}}, [], 70))
+        for ln in p.lines + [i["text"] for i in p.items] + [x for i in p.items for x in i["detail"]]:
+            # what is left is inert text: no BEL, no OSC introducer, no clear-screen sequence
+            self.assertNotIn("\x07", ln)
+            self.assertNotIn("\x1b]", ln)
+            self.assertNotIn("\x1b[2J", ln)
+
     def test_an_unknown_version_or_a_failure_raises(self):
         with self.assertRaises(RuntimeError) as cm:
             self.run_src(Runner(out=json.dumps({"version": 2})))

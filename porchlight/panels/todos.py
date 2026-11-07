@@ -86,7 +86,8 @@ def time_str(t) -> str:
 def tui_items(items) -> list:
     out = []
     for it in items:
-        acts = ["done"]
+        # A pull request is never "done" from here: closing one unmerged is not finishing it.
+        acts = [] if (it.get("provider") == "github" and it.get("kind") == "pr") else ["done"]
         if it.get("url"):
             acts.append("open")
         out.append({"key": it.get("key"), "text": _s(it.get("title")), "detail": detail(it), "url": it.get("url") or "",

@@ -10,15 +10,20 @@ take you into ai-cli (`A`). Off unless the `ai` binary is installed.
 from __future__ import annotations
 
 import json
+import re
 
 from .. import core, secrets
 from ..registry import source
 
 DEFAULTS = {"limit": 8, "command": ["ai", "sessions", "--json"]}
+_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 
 
 def clean(v, n=80) -> str:
-    return secrets.mask_shapes(" ".join(str(v if v is not None else "").split()))[:n]
+    """One display line: control characters (escape sequences) out, whitespace collapsed,
+    token shapes masked, then cut."""
+    s = " ".join(_CONTROL.sub(" ", str(v if v is not None else "")).split())
+    return secrets.mask_shapes(s)[:n]
 
 
 @source("ai_chats", ttl=600, timeout=10, binaries=("ai",), defaults=DEFAULTS)

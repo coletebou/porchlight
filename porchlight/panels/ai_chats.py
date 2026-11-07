@@ -3,6 +3,7 @@ In `porchlight -i` each chat is an item; `A` opens ai-cli's TUI and `ai -i -c` r
 the newest chat."""
 from __future__ import annotations
 
+import re
 import time
 
 from .. import core, theme as T
@@ -11,8 +12,15 @@ from ..ui import kv, panel
 W = 9
 
 
+_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+
+
 def _s(v, n=60) -> str:
-    return " ".join(str(v).split())[:n] if isinstance(v, (str, int, float)) and not isinstance(v, bool) else ""
+    """Record text for one line, control characters out (a record from another version of
+    the source, or edited by hand, must not reach the terminal as escape sequences)."""
+    if not isinstance(v, (str, int, float)) or isinstance(v, bool):
+        return ""
+    return " ".join(_CONTROL.sub(" ", str(v)).split())[:n]
 
 
 def _list(v) -> list:
