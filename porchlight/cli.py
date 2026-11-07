@@ -18,6 +18,8 @@
   porchlight watch [secs]    a live dashboard that redraws itself (a wall or a spare tab)
   porchlight badge           "✖2 ▲3" for a tmux status line or prompt (instant: no probes)
   porchlight top [N]         the processes using the most CPU and memory
+  porchlight todos           every open todo; todos asks · todos done <key> (docs/todos.md)
+  porchlight -i              interactive: move between panels, open details, act (docs/interactive.md)
   porchlight label           this machine's display label (for prompts)
   porchlight version
 
@@ -159,6 +161,12 @@ def _main(argv) -> int:
             print(json.dumps({n: cache.rec(n) for n in sorted(registry.SOURCES)
                               if registry.serves(registry.SOURCES[n], host)}, indent=2, default=str))
         return 0
+    if cmd == "todos" and (len(words) > 1 or "--json" in flags or "-h" in flags):
+        from . import todo_cmd
+        return todo_cmd.run(host, cache, words[1:], flags)
+    if cmd in ("todo", "todos") and len(words) == 1 and "--panel" not in flags:
+        from . import todo_cmd
+        return todo_cmd.run(host, cache, [], flags)
     if cmd == "doctor":
         from . import doctor
         return doctor.run(host, cache, list(problems) + list(plugin_errors))

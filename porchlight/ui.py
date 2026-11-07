@@ -21,8 +21,14 @@ def panel(key, title=None):
 
 
 class Panel:
-    def __init__(self, key, title, lines, level="ok", note=""):
+    """A titled block of lines. `items` (optional) are the rows the interactive dashboard
+    can select and act on: dicts with "text" (one line), and optionally "key", "detail"
+    (lines), "url" and "actions" (names the item supports, such as "done", "open",
+    "attach"; see porchlight/interactive.py). The plain dashboard ignores them."""
+
+    def __init__(self, key, title, lines, level="ok", note="", items=None):
         self.key, self.title, self.lines, self.level, self.note = key, title, lines, level, note
+        self.items = list(items or [])
 
     def render(self, cw: int, accent) -> list:
         title = T.c(self.title, T.gradient(accent, 0.15), bold=True)
@@ -60,8 +66,8 @@ class RCtx:
         ttl = src.ttl if src else 600
         return core.human_age(age) if age > max(ttl * ttl_mult, floor) else ""
 
-    def panel(self, key, rows, level="ok", note="", title=None):
-        return Panel(key, title or TITLES.get(key) or key.upper(), rows, level, note) if rows else None
+    def panel(self, key, rows, level="ok", note="", title=None, items=None):
+        return Panel(key, title or TITLES.get(key) or key.upper(), rows, level, note, items) if rows else None
 
 
 class _Sep:
