@@ -53,7 +53,7 @@ DEFAULTS = {
     "badland_write_key_env": "BADLAND_API_KEY",   # actions only: the full todo API
     "command": "",
     "done_command": "",            # actions for command items: {id} is replaced, run under /bin/sh -c
-    "exclude_repos": [],           # drop items from these repos (keep work items off a personal box)
+    "exclude_repos": [],           # drop items from these repos; globs work ("scratch-*")
     "exclude_paths": [],           # drop Drover items whose file, checkout or cwd contains one of these (e.g. "/identities/work/")
     "limit": 60,                   # items kept per provider
     "ask_pattern": "",
@@ -337,7 +337,8 @@ def todos(ctx):
     jobs = {name: (lambda n=name: guarded(n)) for name in on}
     t0 = time.monotonic()
     results = core.parallel(jobs, timeout=20.0)
-    excl = {str(r).lower() for r in cfg.get("exclude_repos") or []}
+    from .knowledge import repo_excluded
+    excl = list(cfg.get("exclude_repos") or [])
     try:
         pattern = re.compile(str(cfg.get("ask_pattern"))) if cfg.get("ask_pattern") else None
     except re.error:
@@ -347,7 +348,7 @@ def todos(ctx):
     for name in on:
         val = results.get(name)
         if isinstance(val, list):
-            got = [i for i in val if (i.get("repo") or "").lower() not in excl][:limit]
+            got = [i for i in val if not repo_excluded(i.get("repo"), excl)][:limit]
             provs[name] = {"ok": True, "n": len(got)}
         else:
             # A failed read keeps the provider's last items, marked kept, so one outage does not empty the list.

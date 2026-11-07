@@ -8,7 +8,7 @@ import sys
 
 from . import system  # noqa: F401 — the core host sources are not optional
 
-for _mod in ("fleet", "weather", "ai_limits", "saas", "saas_accounts", "aws", "aws_cost", "dev", "cloud_auth", "drover", "todos",
+for _mod in ("fleet", "weather", "ai_limits", "saas", "saas_accounts", "aws", "aws_cost", "dev", "cloud_auth", "drover", "todos", "knowledge",
              "custom"):
     try:
         importlib.import_module("%s.%s" % (__name__, _mod))

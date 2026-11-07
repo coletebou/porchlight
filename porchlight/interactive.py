@@ -591,8 +591,8 @@ def search(host, query: str, http=None) -> list:
     tcfg = host.cfg.source("todos", S.DEFAULTS)
 
     def excluded(r):  # the todos source's exclude_repos / exclude_paths hold for search hits too
-        repo = str(r.get("repo") or "").lower()
-        return repo in {str(x).lower() for x in tcfg.get("exclude_repos") or []} or S._excluded_path(tcfg, r)
+        from .sources.knowledge import repo_excluded
+        return repo_excluded(r.get("repo"), tcfg.get("exclude_repos")) or S._excluded_path(tcfg, r)
 
     out = []
     for op, args, label in (("brain.search", {"query": query, "limit": 8}, "BRAIN"),
