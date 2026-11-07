@@ -76,7 +76,8 @@ def p_knowledge(x):
                                      kv("slug", _s(dec.get("slug"), 100), W), kv("recorded", _when(dec.get("at")), W),
                                      "", T.dim("s searches the brain for more")], "actions": []})
         if len(decs) > SHOWN_DECISIONS:
-            rows.append(" " * W + T.dim("+%d decisions · porchlight -i" % (len(decs) - SHOWN_DECISIONS)))
+            more = len(decs) - SHOWN_DECISIONS
+            rows.append(" " * W + T.dim("+%d decision%s · porchlight -i" % (more, "" if more == 1 else "s")))
     s = _d(d.get("search"))
     if s:
         if not s.get("enabled", True):

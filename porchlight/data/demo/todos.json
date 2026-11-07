@@ -1,0 +1,21 @@
+{
+  "_comment": "Open todos on atlas, the hub, from four trackers (fictional). Times written as \"+N\" / \"-N\" are seconds from the moment the demo loads.",
+  "todos": {
+    "items": [
+      {"key": "files:3b1f0a9c2d", "provider": "files", "id": "3b1f0a9c2d", "title": "Renew the TLS certificate on api.example.com", "url": "", "status": "open", "prio": 1, "due": "-7200", "repo": "", "labels": ["ops"], "kind": "", "updated": 0, "asks": []},
+      {"key": "github:acme/speaker#41", "provider": "github", "id": "acme/speaker#41", "title": "Wake word false-accepts on TV audio (Q-07)", "url": "https://github.com/acme/speaker/issues/41", "status": "open", "prio": 2, "due": 0, "repo": "acme/speaker", "labels": ["bug", "P1"], "kind": "issue", "updated": "-5400", "asks": ["Q-07"]},
+      {"key": "drover:f-fleet-view", "provider": "drover", "id": "f-fleet-view", "title": "One fleet view on every machine (Q-03)", "url": "", "status": "in-progress", "prio": 3, "due": 0, "repo": "dotfiles", "labels": [], "kind": "feature", "updated": "-900", "asks": ["Q-03"]},
+      {"key": "reflections:k2m9q4", "provider": "reflections", "id": "k2m9q4", "title": "Decide whether the gpu-box swap alert should page", "url": "", "status": "open", "prio": 3, "due": 0, "repo": "infra", "labels": [], "kind": "question", "updated": "-86400", "asks": []},
+      {"key": "files:77c2e01b4a", "provider": "files", "id": "77c2e01b4a", "title": "Write the Q-04 follow-up for the backups review", "url": "", "status": "open", "prio": 4, "due": "+172800", "repo": "", "labels": [], "kind": "", "updated": 0, "asks": ["Q-04"]},
+      {"key": "github:acme/webapp#212", "provider": "github", "id": "acme/webapp#212", "title": "Checkout page renders twice on slow networks", "url": "https://github.com/acme/webapp/issues/212", "status": "open", "prio": 4, "due": 0, "repo": "acme/webapp", "labels": ["bug"], "kind": "issue", "updated": "-172800", "asks": []},
+      {"key": "drover:f-q04", "provider": "drover", "id": "f-q04", "title": "Restore drill for the photos backup (Q-04)", "url": "", "status": "not-started", "prio": 4, "due": 0, "repo": "infra", "labels": [], "kind": "feature", "updated": "-259200", "asks": ["Q-04"]},
+      {"key": "reflections:p8x1v3", "provider": "reflections", "id": "p8x1v3", "title": "Move the queue-worker minimum into the service file", "url": "", "status": "open", "prio": 5, "due": 0, "repo": "webapp", "labels": [], "kind": "action", "updated": "-345600", "asks": []}
+    ],
+    "providers": {"files": {"ok": true, "n": 2}, "github": {"ok": true, "n": 2}, "drover": {"ok": true, "n": 2}, "reflections": {"ok": true, "n": 2}},
+    "total": 8, "overdue": 1,
+    "asks": {"Q-03": {"in": ["drover"], "missing": ["github"], "open": 1}, "Q-04": {"in": ["drover", "files"], "missing": ["github"], "open": 2},
+             "Q-07": {"in": ["github"], "missing": ["drover"], "open": 1}},
+    "ask_systems": ["drover", "github"],
+    "alerts": [{"sev": "warn", "msg": "1 todo overdue", "fix": "porchlight todos"}]
+  }
+}

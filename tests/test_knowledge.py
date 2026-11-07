@@ -165,7 +165,7 @@ class Panel(Base):
         text = [T.strip(ln) for ln in p.lines]
         self.assertTrue(text[0].startswith("brain    2129 entries · fresh"), text)
         self.assertIn("Ship the voice gateway", text[1])
-        self.assertIn("+1 decisions", "\n".join(text))
+        self.assertIn("+1 decision · porchlight -i", "\n".join(text))
         self.assertTrue(any(ln.startswith("index    73.9k chunks") for ln in text), text)
         self.assertTrue(any(ln.startswith("refl     412 open workrepo 300") for ln in text), text)
         self.assertTrue(any(ln.startswith("links    wiki · drover") for ln in text), text)
