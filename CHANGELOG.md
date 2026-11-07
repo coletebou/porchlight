@@ -28,6 +28,11 @@ All notable changes to this project are documented here. The format follows
 - A KNOWLEDGE panel and `knowledge` source: a brain's health and newest
   entries, open reflections, wikis and links (contract:
   [docs/contracts/knowledge-v1.md](docs/contracts/knowledge-v1.md)).
+- DROVER panel items for `porchlight -i`: jump to a waiting, working, finished
+  or crashed session's tmux pane (locally, or `ssh -t <host> tmux attach`), read
+  its transcript, copy its id, and (a write) answer a waiting session.
+- `porchlight doctor` reports the hub bundle's version, age, staleness threshold
+  and any porchlight version skew between hub and peer.
 - Opt-in GCP and Azure account checks in ACCESS, using the existing CLI logins
   and read-only API calls to distinguish verified access from cached accounts.
 - Gitea, Forgejo and Bitbucket Cloud providers in PULL REQUESTS, with explicit
@@ -66,6 +71,8 @@ All notable changes to this project are documented here. The format follows
   may be a callable that decides whether a machine opted in.
 
 ### Changed
+- A peer takes no records from a hub bundle at a version it does not read; the
+  FLEET panel says "bundle vN ignored" instead of showing nothing.
 - `[sources.aws_account]` reads one account: `profile` (when set, the only
   profile tried) replaces `profiles`, and `home_regions` replaces `regions`.
   `cost_explorer` takes `"daily"` or `"off"` (the default); `true` still means
