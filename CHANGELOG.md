@@ -7,6 +7,25 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `porchlight -i`: an interactive dashboard. Move between panels, open any
+  panel's items and their details, mark a todo done (through the hub on a
+  peer), open links, jump to a Drover session's tmux pane, search the brain and
+  reflections, and run Drover's or ai-cli's TUI full-screen and come back
+  (`[interactive] programs`). The login path never imports it.
+- A TODOS panel and `todos` source: todo.txt files, a GitHub issue search,
+  Drover features and reflections, Badland todos and any command in one cached,
+  masked list, with ask coverage (`ask_pattern`, `ask_systems`) and the
+  commands `porchlight todos`, `todos asks` and `todos done <key>` (opt-in
+  write-back through each item's own system).
+- A KNOWLEDGE panel and `knowledge` source: the shared brain's health and
+  latest decisions, the search index, reflections per repo, note folders and
+  wiki links, through Drover.
+- One fleet view: the hub's `[fleet] shared_panels` ride in its bundle, and
+  peers of the same identity show them after their own panels. The footer
+  names the view and its age, a warning fires when the hub stops pushing
+  (`stale_after`), and doctor says where the view comes from.
+- `exclude_repos` globs and `exclude_paths`, to keep another identity's
+  Drover items off a dashboard.
 - Opt-in GCP and Azure account checks in ACCESS, using the existing CLI logins
   and read-only API calls to distinguish verified access from cached accounts.
 - Gitea, Forgejo and Bitbucket Cloud providers in PULL REQUESTS, with explicit
@@ -55,6 +74,8 @@ All notable changes to this project are documented here. The format follows
   `cost_explorer = true` it used to ask Cost Explorer every hour for each account.
 
 ### Fixed
+- The AWS Cost Explorer switch test no longer depends on the aws CLI being
+  installed on the machine running the tests.
 - `git status` scans (the REPOS panel and the `repos` source) no longer take
   optional locks, so a scan killed by its timeout cannot leave
   `.git/index.lock` behind and break your next commit.

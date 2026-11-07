@@ -147,7 +147,9 @@ render context: `x.data(name)`, `x.cw` (column width), `x.v` (live vitals),
 `x.lv` (all live probes), `x.alerts`, `x.cfg`, `x.host`, `x.last_seen` (the
 previous login's time, or None: for "since your last visit"), `x.stale_note(name)`
 ("12m" when older than expected, "✖ 3h" after a failure), and
-`x.panel(key, rows, level, note)`. Helpers: `kv(label, value, width)`,
+`x.panel(key, rows, level, note, items=None)`. `items` are the rows `porchlight -i` can
+open and act on: dicts with `text` (one line) and optionally `key`, `detail` (lines),
+`url` (`o` opens it) and `actions` ([interactive.md](interactive.md)). Helpers: `kv(label, value, width)`,
 `cells(items, width)` (as many columns as fit), `fitted(items, room)` (as many
 items as fit on one row, then "+N" for the rest), `wrap(text, widths)` (words
 onto lines of those widths, cut only when one alone is wider than its line), `SEP`, and the `theme`

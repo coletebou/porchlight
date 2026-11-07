@@ -68,6 +68,8 @@ git clone https://github.com/coletebou/porchlight ~/.local/share/porchlight
 | **SERVICES** | systemd units (system and user, globs, merged groups like `runners 3/3`, restart counts), failed units, launchd jobs and Homebrew services, processes you watch |
 | **AGENTS** | Claude Code, Codex, Aider, Gemini, OpenCode, Goose, Cursor Agent, Amp, Copilot… running counts, orphaned agent and MCP processes, zombies, tmux, top memory |
 | **DROVER** | from a [Drover](https://github.com/coletebou/drover) daemon: agent sessions waiting on you and what they ask, what finished or crashed since your last visit, who works on which host, each daemon's commit and the credential pool |
+| **TODOS** | open items from todo.txt files, a GitHub issue search, Drover features and reflections, Badland and any command, in one cached list; ask coverage (which systems each ask id is in); `porchlight todos done` writes back, opt-in ([docs/todos.md](docs/todos.md)) |
+| **KNOWLEDGE** | the shared brain's health and latest decisions, the search index, reflections per repo, your note folders and wiki links ([docs/knowledge.md](docs/knowledge.md)) |
 | **AI LIMITS** | Claude, Codex, Cursor and Grok plan windows (5 h / 7 d / per model) with reset times and credits, read-only |
 | **DOCKER** | compose stacks up/total, unhealthy, restarting, recent crashes (not clean exits or deliberate stops), expected containers missing |
 | **PULL REQUESTS** | yours and those awaiting your review on GitHub, GitLab, Gitea, Forgejo and Bitbucket Cloud: conflicts, approvals, changes requested, CI where available |
@@ -210,6 +212,11 @@ the hub's FLEET panel shows everyone. If the hub goes quiet, a peer that has
 the credentials takes over that source until it is back.
 [docs/fleet.md](docs/fleet.md).
 
+Should every machine show the same thing? Half of it: this machine's own
+panels first, then a fleet part the hub decides (`[fleet] shared_panels`)
+that reads the same everywhere, with its age in the footer and a warning when
+the hub stops pushing. [docs/fleet-consistency.md](docs/fleet-consistency.md).
+
 ## Keep work and personal apart
 
 ```toml
@@ -231,7 +238,13 @@ porchlight alerts          ranked, with fixes   porchlight top          where th
 porchlight collect         refresh now          porchlight themes       preview every theme
 porchlight init            starter config       porchlight label        this machine's display name
 porchlight install all     timer + login hook   porchlight demo         a sample fleet
+porchlight -i              interactive          porchlight todos        every open todo
 ```
+
+`porchlight -i` is the dashboard you can move around in: open any panel's
+items, mark a todo done, open a link, jump to a Drover session's tmux pane,
+search the brain, or run Drover's or ai-cli's TUI and come back
+([docs/interactive.md](docs/interactive.md)).
 
 Flags: `--width N`, `--theme NAME`, `--color truecolor|256|16|none`, `--ascii`,
 `--compact`, `--full`. The login hook (`porchlight install shell`) runs it once

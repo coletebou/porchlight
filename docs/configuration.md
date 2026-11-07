@@ -124,6 +124,7 @@ quotes_file = ""      # fallback quotes (one per line) instead of the bundled li
 qotd_file = ""        # your own questions, one per line
 hints = true
 timing = true         # "rendered 18ms"
+fleet_view = true     # on a peer: "fleet view hub 3m" (amber once older than fleet.stale_after)
 ```
 
 ## [thresholds]
@@ -202,9 +203,23 @@ connect_timeout = 6
 push_timeout = 25
 remote_cache = ""     # the peers' cache dir if it is not the default
 badge = ""            # a source whose `badge` fills this host's agents column ("docker" → "12/12")
+shared_panels = []    # on the hub: the fleet panels every peer shows after its own, in this order
+adopt_layout = true   # on a peer: take the hub's shared_panels from its bundle (same identity only)
+hub = ""              # on a peer: the hub's name, for "no fleet view yet" before the first bundle
+stale_after = 900     # on a peer: warn when the hub's bundle is older than this (s); 0 = never
 ```
 
-See [fleet.md](fleet.md).
+See [fleet.md](fleet.md) and [fleet-consistency.md](fleet-consistency.md).
+
+## [interactive]
+
+```toml
+[interactive]
+refresh = 5           # seconds between reloads of porchlight -i
+programs = {}         # key → argv run full-screen, over the built-in D (drover tui) and A (ai -t); [] turns one off
+```
+
+See [interactive.md](interactive.md).
 
 ## [identities.*]
 
