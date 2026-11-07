@@ -142,9 +142,11 @@ def summary(res) -> dict:
     mgr = res.get("manager") if isinstance(res.get("manager"), dict) else {}
     return {
         "waiting": [{"name": session_name(w), "host": _host(w.get("host")), "engine": text(w.get("engine"), 16),
+                     "id": _ID.sub("", str(w.get("id") or ""))[:64],
                      "kind": text(w.get("kind"), 16), "since": _when(w.get("since")),
                      "ask": ask_of(w)} for w in _dicts(res.get("waiting"), WAITING_KEEP)],
-        "working": [{"name": session_name(w), "host": _host(w.get("host")), "engine": text(w.get("engine"), 16)}
+        "working": [{"name": session_name(w), "host": _host(w.get("host")), "engine": text(w.get("engine"), 16),
+                     "id": _ID.sub("", str(w.get("id") or ""))[:64]}
                     for w in _dicts(res.get("working"), WORKING_KEEP)],
         "hosts": [{"name": _host(h.get("name")), "up": h.get("up") is not False, "waiting": _int(h.get("waiting")),
                    "working": _int(h.get("working")), "idle": _int(h.get("idle"))}

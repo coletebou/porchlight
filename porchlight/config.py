@@ -53,6 +53,9 @@ DEFAULTS = {
               # One fleet view: the hub's shared_panels ride in its bundle and every peer of the same
               # identity shows them, in that order, after its own local panels (docs/fleet-consistency.md).
               "shared_panels": [], "adopt_layout": True, "hub": "", "stale_after": 900},
+    # porchlight -i (docs/interactive.md). programs: one key → an argv run full-screen, merged over
+    # the built-in D (drover tui) and A (ai-cli's TUI); an empty list turns a key off.
+    "interactive": {"refresh": 5, "programs": {}},
     "system": {"mounts": [], "mount_labels": {}},
     "services": {"systemd": [], "systemd_user": [], "launchd": [], "auto": True, "optional": [], "remote_login": True},
     "ports": [],

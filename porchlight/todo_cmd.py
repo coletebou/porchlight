@@ -79,12 +79,11 @@ def done(host, cache, key, flags) -> int:
         print("porchlight: %s" % e, file=sys.stderr)
         return 2
     if "--via-hub" in flags:
-        hub = str(host.cfg.get("fleet.hub") or (cache.bundle or {}).get("from") or "")
+        hub = hub_name(host, cache)
         if not hub:
             print("porchlight: no hub known (set [fleet] hub or wait for a bundle)", file=sys.stderr)
             return 2
-        argv = [core.which("ssh") or "ssh", "-o", "BatchMode=yes", hub, "porchlight", "todos", "done", str(it["key"]), "--yes"]
-        rc, out, err = core.run(argv, timeout=40)
+        rc, out, err = core.run(hub_argv(hub, str(it["key"])), timeout=40)
         sys.stdout.write(out)
         sys.stderr.write(err)
         return rc
@@ -124,3 +123,27 @@ def forget(key: str) -> None:
         core.write_json_atomic(path, rec)
     except OSError:
         pass
+
+
+def hub_name(host, cache) -> str:
+    """The hub this peer's fleet view comes from: [fleet] hub, else the bundle's sender."""
+    if host.hub:
+        return ""
+    b = cache.bundle if cache is not None and isinstance(cache.bundle, dict) else {}
+    return str(host.cfg.get("fleet.hub") or b.get("from") or "")
+
+
+def via_hub(host, cache) -> str:
+    """The hub to act through, when this machine shows the hub's todos rather than its own:
+    a peer with no todos record of its own (the credentials live on the hub). Else ""."""
+    from . import registry
+    if host.hub or core.read_json(registry.src_path("todos")):
+        return ""
+    return hub_name(host, cache)
+
+
+def hub_argv(hub: str, key: str) -> list:
+    """`porchlight todos done <key> --yes` on the hub, over the same ssh the fleet push uses."""
+    import shlex  # ssh hands the remote shell one string: quote the key, never trust its characters
+    return [core.which("ssh") or "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=6", hub,
+            "porchlight todos done %s --yes" % shlex.quote(key)]

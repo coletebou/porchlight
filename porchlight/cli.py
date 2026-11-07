@@ -144,6 +144,9 @@ def _main(argv) -> int:
         return top.run(int(words[1]) if len(words) > 1 and words[1].isdigit() else 10)
 
     plugin_errors = sources.register_all(host)
+    if "-i" in flags or "--interactive" in flags or cmd in ("interactive", "tui"):
+        from . import interactive, panels as _panels  # noqa: F401 — registers the panel builders
+        return interactive.run(host)
     cache = registry.Cache()
 
     if cmd == "json":
