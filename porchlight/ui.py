@@ -32,6 +32,12 @@ class Action:
     writes  True when the handler changes state somewhere (an API write, a message):
             refused unless [interactive] allow_writes = true, and always confirmed
     confirm the y/N question asked before a write ("Mark 'renew cert' done in Badland?")
+
+    Two args the TUI itself interprets before it calls the handler:
+    args["input"]  a prompt string: porchlight -i first asks for one line of text and passes
+                   it to the handler as args["text"]; an empty answer cancels the action
+    args["pause"]  True on a "run" action: after the program exits, wait for Enter before
+                   redrawing (for programs that print and exit, like a transcript)
     """
 
     def __init__(self, name, label, key, args=None, writes=False, confirm=""):
