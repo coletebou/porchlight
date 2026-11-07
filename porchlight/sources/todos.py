@@ -60,6 +60,7 @@ DEFAULTS = {
     "actions": False,              # allow `porchlight todos done` and the interactive dashboard to write
     "state_dir": "",               # Drover's state dir (default: the drover source's setting, else ~/.local/state/drover)
     "overdue_alert": True,
+    "shown": 6,                    # rows the TODOS panel shows (the rest: porchlight todos, or porchlight -i)
 }
 
 
