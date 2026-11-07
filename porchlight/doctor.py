@@ -38,10 +38,20 @@ def run(host, cache, plugin_errors=()) -> int:
     for p in list(cfg.problems) + list(plugin_errors) + registry.check_settings(cfg):
         print(T.c("%s %s" % (T.g("warn"), p), "amber"))
     print(timer_state())
+    from .render import shared_panels
+    shared = shared_panels(host, cache)
     if not host.hub:
         b = cache.bundle
         if b:
-            print(T.dim("hub bundle from %s, %s old" % (b.get("from"), core.human_age(now - b.get("ts", 0)))))
+            stale = now - b.get("ts", 0) > float(cfg.get("fleet.stale_after", 900) or 1e12)
+            line = "hub bundle from %s, %s old" % (b.get("from"), core.human_age(now - b.get("ts", 0)))
+            print(T.c(line + " (stale)", "amber") if stale else T.dim(line))
+        elif cfg.get("fleet.hub"):
+            print(T.c("no hub bundle yet from %s (on the hub: add this machine to [fleet] peers)" % cfg.get("fleet.hub"), "amber"))
+    if shared:
+        src = "this hub's [fleet] shared_panels" if host.hub else (
+            "the hub's bundle" if shared != list(host.shared_panels) or not host.shared_panels else "this config")
+        print(T.dim("fleet view: ") + " ".join(shared) + T.dim("  (from %s)" % src))
     print()
     print(T.dim("%-16s %-6s %6s %8s  %-5s %7s  %s" % ("source", "scope", "ttl", "age", "state", "ms", "note")))
     env = None

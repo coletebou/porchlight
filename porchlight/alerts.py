@@ -111,6 +111,19 @@ def gather(host, cache, lv) -> list:
             for a in d.get("alerts") or []:
                 add(a.get("sev", "warn"), a.get("msg", "") + (" (stale)" if stale else ""), name, a.get("fix"))
 
+    # A peer whose fleet view stopped arriving: every shared panel is quietly getting older.
+    if not host.hub:
+        b = cache.bundle if isinstance(cache.bundle, dict) else {}
+        hub = str(b.get("label") or b.get("from") or host.cfg.get("fleet.hub") or "")
+        stale = float(host.cfg.get("fleet.stale_after", 900) or 0)
+        if b.get("ts") and stale:
+            age = core.now() - float(b.get("ts") or 0)
+            if age > stale:
+                add("warn", "fleet view from %s is %s old (the hub stopped pushing)" % (hub, core.human_age(age)), "fleet",
+                    "on %s: porchlight doctor" % (b.get("from") or hub))
+        elif host.cfg.get("fleet.hub"):
+            add("info", "no fleet view from %s yet" % hub, "fleet", "on %s: add this machine to [fleet] peers" % hub)
+
     # Peers' critical alerts, on whichever host has the fleet table.
     max_age = float(host.cfg.get("alerts.peer_max_age", 1800))
     for peer, rec in cache.fleet_hosts(host.hub).items():

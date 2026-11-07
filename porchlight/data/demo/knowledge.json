@@ -1,0 +1,16 @@
+{
+  "_comment": "What atlas's agents remember, through its Drover daemon (fictional).",
+  "knowledge": {
+    "brain": {"configured": true, "ok": true, "stale": false, "entries": 2130, "chunks": 4194, "status": 200,
+              "decisions": [{"title": "Keep customer data out of the shared agent memory", "slug": "keep-customer-data-out", "at": "-7200"},
+                            {"title": "Pin the backup window to 02:00 UTC on every box", "slug": "backup-window-0200", "at": "-345600"},
+                            {"title": "gpu-box runs batch jobs only, no interactive agents", "slug": "gpu-box-batch-only", "at": "-604800"}]},
+    "search": {"enabled": true, "chunks": 74500, "sources": 1170, "newest": "-40", "vectors": 0, "kinds": {"claude": 5526, "doc": 435}},
+    "reflections": [{"repo": "webapp", "open": 31, "stale": 4, "done": 120, "last": "-3600"},
+                    {"repo": "infra", "open": 18, "stale": 2, "done": 64, "last": "-7200"},
+                    {"repo": "speaker", "open": 9, "stale": 0, "done": 22, "last": "-86400"}],
+    "notes": [{"name": "wiki", "notes": 1240, "capped": false, "recent": [{"title": "restore-drill", "at": "-840"}, {"title": "gpu-box", "at": "-7200"}]}],
+    "links": [{"name": "wiki", "url": "https://wiki.example.com"}, {"name": "grafana", "url": "https://grafana.example.com/d/fleet"},
+              {"name": "drover", "url": "http://127.0.0.1:7337/"}]
+  }
+}
