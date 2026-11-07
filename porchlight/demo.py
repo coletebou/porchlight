@@ -64,8 +64,10 @@ cost_explorer = "daily"
 subscription = "Example development"
 
 [sources.todos]
+ask_pattern = '\\bV-\\d{2,3}\\b'
 
 [sources.knowledge]
+brain_name = "brain"
 
 [[custom]]
 name = "restic"
@@ -245,6 +247,10 @@ def run(flags, opts, words) -> int:
     try:
         width = int(opts["--width"]) if (opts.get("--width") or "").isdigit() else None
         only = [w for w in words if not w.startswith("-")] or None
+        if "-i" in flags or "--interactive" in flags:  # porchlight demo -i: the interactive dashboard on the demo cache
+            from . import panels, sources, tui  # noqa: F401 — register the built-in sources and panels
+            sources.register_all(host)
+            return tui.run(host, flags, opts)
         print(render.render(host, cache, width=width, only=only, compact=compact_flag(flags)))
     finally:
         restore()
