@@ -26,7 +26,9 @@ class Action:
     name    a handler registered in porchlight.actions (@action("todos.done")); the
             built-ins are "open_url", "copy" and "run"
     label   what the key hint says ("mark done")
-    key     one character, unique within the item ("d")
+    key     one character, unique within the item ("d"); not one of porchlight -i's own
+            keys (j k g G h l o y a r q / ?), which win in the list view, so an item key
+            that collides only works from the item's detail view
     args    JSON-able arguments for the handler; never a credential (a handler loads
             its own from the secrets files when it runs)
     writes  True when the handler changes state somewhere (an API write, a message):
