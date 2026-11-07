@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 
-from . import alerts, core, live, registry
+from . import __version__, alerts, core, live, registry
 
 SHARED_MAX_BYTES = 16 * 1024
 
@@ -22,6 +22,7 @@ def build(host, cache=None) -> dict:
     agents = pr.get("agents") or {}
     snap = {
         "v": 1, "host": host.name, "label": host.label, "identity": host.identity, "ts": core.now(),
+        "porchlight": __version__,  # so the hub's FLEET panel/doctor can flag a peer on a different version
         "os": v.get("os"), "uptime": v.get("uptime"), "load": round(v["load"][0], 2), "cores": v["cores"],
         "mem": round(core.pct(v["mem"]["used"], v["mem"]["total"])),
         "swap": round(core.pct(v["swap"]["used"], v["swap"]["total"])) if v["swap"]["total"] else None,

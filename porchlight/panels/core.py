@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 
-from .. import core, live, theme as T
+from .. import core, hosts, live, theme as T
 from ..ui import SEP, Panel, cells, fnum, kv, panel
 
 
@@ -212,6 +212,12 @@ def fleet_table(x) -> dict:
 def p_fleet(x):
     table = fleet_table(x)
     if len(table) <= 1 and not x.host.hub:
+        if x.cache.bundle and not hosts.bundle_ok(x.cache.bundle):
+            # A hub bundle arrived at a version this porchlight does not read: say so once
+            # rather than hide the fleet without a word (doctor has the details).
+            v = x.cache.bundle.get("v")
+            return Panel("fleet", "FLEET", [T.dot("unknown") + T.dim(" hub bundle not read: newer format")],
+                         "unknown", "bundle v%r ignored" % (v,))
         return None  # a lone machine has no fleet to show
     order = [str(n) for n in x.cfg.items("fleet.order")]
     labels = x.cfg.table("fleet.labels")
@@ -275,8 +281,11 @@ def p_fleet(x):
                     T.dim("now" if age < 90 else core.human_age(age)))
     if x.host.hub:
         note = x.stale_note("fleet", 4, 900)
+    elif hosts.bundle_ok(x.cache.bundle):
+        txt = "via %s · %s" % (x.cache.bundle.get("from", "hub"), core.human_age(hosts.bundle_age(x.cache.bundle)))
+        note = T.c(txt, "amber") if hosts.bundle_stale(x.host, x.cache.bundle) else txt
     elif x.cache.bundle:
-        note = "via %s · %s" % (x.cache.bundle.get("from", "hub"), core.human_age(core.now() - (x.cache.bundle.get("ts") or 0)))
+        note = "bundle v%r ignored" % x.cache.bundle.get("v")  # an unknown version: as if no bundle at all
     else:
         note = "no hub bundle"
     return Panel("fleet", "FLEET", rows, lvl, note)

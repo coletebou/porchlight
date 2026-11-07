@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 
-from . import core, live, registry
+from . import core, hosts, live, registry
 
 SEV_RANK = {"crit": 0, "warn": 1, "info": 2}
 
@@ -124,6 +124,13 @@ def gather(host, cache, lv) -> list:
             # Name the peer unless its alert already does ("disk / 93% full on db1").
             msg = a["msg"] if label in a.get("msg", "") else "%s: %s" % (label, a["msg"])
             add("crit", msg, "peer")
+
+    # A stale hub bundle is a state, not an outage (docs/fleet-consistency.md):
+    # one warning, never on the hub itself or a solo machine with no bundle at all.
+    if not host.hub and hosts.bundle_ok(cache.bundle) and hosts.bundle_stale(host, cache.bundle):
+        frm = cache.bundle.get("from") or "hub"
+        add("warn", "fleet data from %s is %s old" % (frm, core.human_age(hosts.bundle_age(cache.bundle))),
+            "fleet", "ssh %s porchlight collect --only fleet" % frm)
 
     mute = host.cfg.items("alerts.ignore")
     seen, uniq = set(), []

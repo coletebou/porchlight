@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 
-from . import core, registry, theme as T
+from . import __version__, core, hosts, registry, theme as T
 from .collect import is_due
 
 
@@ -38,10 +38,30 @@ def run(host, cache, plugin_errors=()) -> int:
     for p in list(cfg.problems) + list(plugin_errors) + registry.check_settings(cfg):
         print(T.c("%s %s" % (T.g("warn"), p), "amber"))
     print(timer_state())
+    # docs/fleet-consistency.md: the fleet-wide half, its source, and its age.
+    own_shared = [str(p) for p in cfg.items("fleet.shared_panels")]
+    b = cache.bundle
+    if own_shared:
+        shared_from = "this host's fleet.shared_panels (%d panel%s)" % (len(own_shared), "" if len(own_shared) == 1 else "s")
+    elif hosts.bundle_ok(b) and (b.get("layout") or {}).get("shared_panels"):
+        n = len(b["layout"]["shared_panels"])
+        shared_from = "the hub's layout.shared_panels (%d panel%s)" % (n, "" if n == 1 else "s")
+    else:
+        shared_from = "none"
+    print(T.dim("fleet shared panels from %s" % shared_from))
     if not host.hub:
-        b = cache.bundle
-        if b:
-            print(T.dim("hub bundle from %s, %s old" % (b.get("from"), core.human_age(now - b.get("ts", 0)))))
+        if not b:
+            print(T.dim("fleet bundle: none yet"))
+        elif not hosts.bundle_ok(b):
+            print(T.c("fleet bundle: v%r ignored (unsupported version, treated as no bundle)" % b.get("v"), "amber"))
+        else:
+            age = hosts.bundle_age(b)
+            stale = hosts.bundle_stale(host, b)
+            line = "fleet bundle: v%s from %s, %s old%s" % (b.get("v"), b.get("from"), core.human_age(age),
+                                                              " · STALE (threshold %s)" % core.human_age(hosts.stale_after(host, b)) if stale else "")
+            theirs = b.get("porchlight")
+            skew = T.dim("  ·  hub porchlight %s vs ours %s" % (theirs, __version__)) if theirs and theirs != __version__ else ""
+            print((T.c(line, "amber") if stale else T.dim(line)) + skew)
     print()
     print(T.dim("%-16s %-6s %6s %8s  %-5s %7s  %s" % ("source", "scope", "ttl", "age", "state", "ms", "note")))
     env = None

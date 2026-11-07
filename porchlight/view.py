@@ -23,7 +23,8 @@ def _plain(s) -> str:
 def fleet_info(host, cache) -> dict:
     """Where the fleet-wide panels come from: this machine (a hub, or no fleet) or the
     hub's bundle, and how old that bundle is."""
-    b = cache.bundle or {}
+    from . import hosts
+    b = cache.bundle if hosts.bundle_ok(cache.bundle) else {}  # an unknown version: as if none arrived
     if host.hub or not b:
         return {"role": "hub" if host.hub else "solo", "hub": host.label if host.hub else "", "bundle_age": None}
     ts = b.get("ts")

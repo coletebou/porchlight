@@ -156,6 +156,12 @@ class Cache:
         self._recs = {}
         self._shared_map = None
         self.bundle = core.read_json(core.BUNDLE_PATH) or {}
+        # The records a peer takes from the hub: none from a bundle at a version this
+        # porchlight does not understand (hosts.bundle_version), which render, alerts,
+        # doctor and the FLEET panel already treat as no bundle at all. self.bundle stays
+        # the raw file so they can still say "bundle vN ignored".
+        from . import hosts
+        self.hub = self.bundle if hosts.bundle_version(self.bundle) else {}
 
     def _shared(self, name):
         """Records peers shared in their snapshots (from this hub's fleet table or the bundle)."""
@@ -163,7 +169,7 @@ class Cache:
             self._shared_map = {}
             local_fleet = core.read_json(src_path("fleet")) or {}
             for table in (((local_fleet.get("data") or {}).get("hosts") or {}),
-                          ((self.bundle.get("fleet") or {}).get("hosts") or {})):
+                          ((self.hub.get("fleet") or {}).get("hosts") or {})):
                 for rec in table.values():
                     shared = ((rec or {}).get("snap") or {}).get("shared") or {}
                     for k, v in shared.items():
@@ -174,7 +180,7 @@ class Cache:
     def rec(self, name):
         if name not in self._recs:
             local = core.read_json(src_path(name))
-            hub = (self.bundle.get("sources") or {}).get(name)
+            hub = (self.hub.get("sources") or {}).get(name)
             cands = [r for r in [local, hub] + self._shared(name) if isinstance(r, dict) and r.get("data") is not None]
             # A successful record whose data carries no soft error first (a peer's
             # "token expired" must not shadow the hub's live numbers), then the newest.
@@ -201,7 +207,7 @@ class Cache:
         """The fleet table: the hub's own `fleet` record, or a peer's copy from the bundle."""
         if hub:
             return (self.data("fleet") or {}).get("hosts") or {}
-        return (self.bundle.get("fleet") or {}).get("hosts") or {}
+        return (self.hub.get("fleet") or {}).get("hosts") or {}
 
 
 COMMON_SETTINGS = {"enabled", "identities", "hosts", "paths", "scope", "share"}

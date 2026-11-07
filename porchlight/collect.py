@@ -33,7 +33,7 @@ def _soft_failure(data) -> bool:
 def is_due(src, host, now, cache) -> bool:
     rec = core.read_json(src_path(src.name))
     if registry.scope_of(src, host) == "global" and not host.hub:
-        hub_rec = (cache.bundle.get("sources") or {}).get(src.name)
+        hub_rec = (cache.hub.get("sources") or {}).get(src.name)
         if hub_rec and now - hub_rec.get("ts", 0) < src.fallback:
             return False
     if not rec:

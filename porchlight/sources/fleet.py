@@ -14,8 +14,8 @@ import shlex
 import subprocess
 import time
 
-from .. import core
-from ..registry import SOURCES, scope_of, source, src_path
+from .. import __version__, core
+from ..registry import SOURCES, scope_of, source, src_path, state
 
 
 def remote_command(cache_dir: str = "") -> str:
@@ -27,17 +27,36 @@ def remote_command(cache_dir: str = "") -> str:
 
 
 def build_bundle(host, peers_prev: dict) -> dict:
+    """The bundle v2 the hub writes to every peer's <cache>/hub/bundle.json
+    (docs/contracts/porchlight-bundle-v2.md): every global source's record,
+    plus the records of the local sources named in fleet.bundle_local whose
+    state here is "on" (a fleet-wide view a peer without one can borrow), the
+    fleet table, and the shared-panel layout this host ships (docs/fleet-
+    consistency.md)."""
     srcs = {}
     for name, s in SOURCES.items():
         if scope_of(s, host) == "global":
             rec = core.read_json(src_path(name))
             if rec:
                 srcs[name] = rec
+    for name in host.cfg.items("fleet.bundle_local"):
+        name = str(name)
+        s = SOURCES.get(name)
+        if s is None or name in srcs or state(s, host) != "on":
+            continue
+        rec = core.read_json(src_path(name))
+        if rec:
+            srcs[name] = rec
     hosts = dict(peers_prev)
     own = core.read_json(core.SNAPSHOT_PATH)
     if own:
         hosts[host.name] = {"ok": True, "seen": own.get("ts", core.now()), "snap": own}
-    return {"v": 1, "from": host.name, "ts": core.now(), "sources": srcs, "fleet": {"hosts": hosts}}
+    bundle = {"v": 2, "porchlight": __version__, "from": host.name, "ts": core.now(),
+              "interval": SOURCES["fleet"].ttl, "sources": srcs, "fleet": {"hosts": hosts}}
+    shared = [str(p) for p in host.cfg.items("fleet.shared_panels")]
+    if shared:
+        bundle["layout"] = {"shared_panels": shared}
+    return bundle
 
 
 def exchange(peer: str, payload: bytes, cfg) -> dict:

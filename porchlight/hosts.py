@@ -117,3 +117,67 @@ def current(cfg=None, fresh=False) -> Host:
     if cfg is not None or fresh or _CURRENT is None:
         _CURRENT = Host(cfg or C.load())
     return _CURRENT
+
+
+# ── Fleet bundle versioning and staleness ───────────────────────────────────
+# docs/contracts/porchlight-bundle-v2.md and docs/fleet-consistency.md. Kept
+# here (not in sources/fleet.py) so render.py, alerts.py, panels/core.py,
+# doctor.py and collect.py can read a bundle without importing the `sources`
+# package, whose __init__ eagerly registers every source module — exactly the
+# import cost the login render must not pay.
+BUNDLE_VERSIONS = (1, 2)
+
+
+def bundle_version(bundle) -> int:
+    """0 when there is no bundle, or its "v" is not one porchlight understands:
+    callers then treat it exactly like no bundle at all (and `doctor` says so).
+    A bundle with no "v" at all has the v1 shape (every porchlight release wrote
+    "v": 1; the key was only ever missing from hand-made files) and reads as v1."""
+    if not isinstance(bundle, dict) or not bundle:
+        return 0
+    v = bundle.get("v", 1)
+    return v if v in BUNDLE_VERSIONS and not isinstance(v, bool) else 0
+
+
+def bundle_ok(bundle) -> bool:
+    """Whether `bundle` is usable: present and at a version we understand."""
+    return bool(bundle) and bundle_version(bundle) != 0
+
+
+def bundle_interval(bundle, default=240) -> float:
+    """The hub's exchange cycle (seconds) as carried in a v2 bundle, else `default`."""
+    if bundle_ok(bundle):
+        try:
+            return float(bundle.get("interval") or default)
+        except (TypeError, ValueError):
+            return default
+    return default
+
+
+def stale_after(host, bundle) -> float:
+    """fleet.stale_after when set, else 7 x the bundle's exchange interval."""
+    configured = float(host.cfg.get("fleet.stale_after", 0) or 0)
+    return configured if configured > 0 else 7 * bundle_interval(bundle)
+
+
+def bundle_age(bundle) -> float:
+    return core.now() - bundle.get("ts", 0) if bundle_ok(bundle) else 1e12
+
+
+def bundle_stale(host, bundle) -> bool:
+    """False for no bundle (that is "solo", not stale) and for the hub itself,
+    which never reads its own bundle file."""
+    return bundle_ok(bundle) and bundle_age(bundle) > stale_after(host, bundle)
+
+
+def shared_panels(host, bundle=None) -> list:
+    """The fleet-wide panel list this host appends after its own (panel_keys),
+    in order: this host's own fleet.shared_panels when it set one (an escape
+    hatch, also how the hub's own list reaches its own render), else the
+    bundle's layout.shared_panels, else none."""
+    own = [str(p) for p in host.cfg.items("fleet.shared_panels")]
+    if own:
+        return own
+    if not bundle_ok(bundle):
+        return []
+    return [str(p) for p in ((bundle.get("layout") or {}).get("shared_panels") or [])]

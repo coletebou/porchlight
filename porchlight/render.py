@@ -11,7 +11,7 @@ import os
 import shutil
 import time
 
-from . import alerts, core, font, theme as T
+from . import alerts, core, font, hosts, theme as T
 from .ui import Panel, RCtx
 
 
@@ -233,6 +233,9 @@ def side_facts(host, cache, lv, al, last_seen) -> list:
         facts.append("  ".join(parts))
     else:
         facts.append(T.c("%s all systems nominal" % T.g("ok"), "green", bold=True))
+    if not host.hub and hosts.bundle_ok(cache.bundle):  # docs/fleet-consistency.md: staleness is shown, never hidden
+        txt = "fleet via %s · %s" % (cache.bundle.get("from") or "hub", core.human_age(hosts.bundle_age(cache.bundle)))
+        facts.append(T.c(txt, "amber") if hosts.bundle_stale(host, cache.bundle) else T.dim(txt))
     snap_mtime = core.mtime(core.SNAPSHOT_PATH)
     data_age = core.now() - snap_mtime if snap_mtime else None
     tail = []
@@ -416,10 +419,11 @@ class Frame:
         self.ctx, self.keys, self.built, self.only, self.t0 = ctx, keys, built, only, t0
 
 
-def panel_keys(host, only=None, compact=False) -> list:
+def panel_keys(host, only=None, compact=False, cache=None) -> list:
     """The panel keys a render shows, in order: `only`, else the layout's panels, then
-    [[custom]] panels and (with layout.panels = "auto") plugin panels; the compact list
-    in compact mode."""
+    [[custom]] panels and (with layout.panels = "auto") plugin panels, then (not compact)
+    every fleet-wide shared panel (docs/fleet-consistency.md) not already listed, in the
+    shared order; the compact list in compact mode."""
     from . import panels
     keys = list(only or host.panels)
     if not only:
@@ -427,6 +431,9 @@ def panel_keys(host, only=None, compact=False) -> list:
         if host.auto_panels:  # plugin panels too, after the built-ins, whenever they have data
             extra += [k for k in panels.BUILDERS if k not in extra]
         keys = keys + [k for k in extra if k not in keys]
+        if not compact:
+            bundle = cache.bundle if cache is not None else {}
+            keys = keys + [k for k in hosts.shared_panels(host, bundle) if k not in keys]
     if compact:
         keys = [k for k in host.compact if k in panels.BUILDERS]
     return keys
@@ -445,7 +452,7 @@ def prepare(host, cache, width=None, only=None, login=False, compact=None, repos
     compact = compact_mode(host, W, only) if compact is None else compact
     _, cw = layout(W, host.cfg)
     ctx = RCtx(host, cache, lv, al, cw, last_seen)
-    keys = panel_keys(host, only, compact)
+    keys = panel_keys(host, only, compact, cache)
     return Frame(W, lv, al, last_seen, compact, ctx, keys, build_panels(ctx, keys), only, t0)
 
 
