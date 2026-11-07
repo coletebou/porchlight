@@ -10,7 +10,7 @@ import os
 from . import config as C, core
 
 # Panels in their canonical order; layout.panels = "auto" shows whichever have data.
-AUTO_PANELS = ["system", "services", "agents", "todos", "drover", "knowledge", "docker", "fleet", "network", "ai", "prs", "access",
+AUTO_PANELS = ["system", "services", "agents", "todos", "drover", "knowledge", "docker", "fleet", "network", "ai", "ai_chats", "prs", "access",
                "instances", "health", "edge", "infra", "aws", "comms", "backups", "files", "money", "repos"]
 
 
