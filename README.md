@@ -68,8 +68,10 @@ git clone https://github.com/coletebou/porchlight ~/.local/share/porchlight
 | **SERVICES** | systemd units (system and user, globs, merged groups like `runners 3/3`, restart counts), failed units, launchd jobs and Homebrew services, processes you watch |
 | **AGENTS** | Claude Code, Codex, Aider, Gemini, OpenCode, Goose, Cursor Agent, Amp, Copilot… running counts, orphaned agent and MCP processes, zombies, tmux, top memory |
 | **DROVER** | from a [Drover](https://github.com/coletebou/drover) daemon: agent sessions waiting on you and what they ask, what finished or crashed since your last visit, who works on which host, each daemon's commit and the credential pool |
+| **TODOS** | open items from a Badland-compatible todos API, Drover features and reflections, GitHub issues by label and todo files, in one ranked list; optionally which system is missing which ask ("track every ask") |
 | **AI LIMITS** | Claude, Codex, Cursor and Grok plan windows (5 h / 7 d / per model) with reset times and credits, read-only |
 | **DOCKER** | compose stacks up/total, unhealthy, restarting, recent crashes (not clean exits or deliberate stops), expected containers missing |
+| **KNOWLEDGE** | a shared memory service's health and newest entries, open reflections, recently edited wiki pages, your dashboard links |
 | **PULL REQUESTS** | yours and those awaiting your review on GitHub, GitLab, Gitea, Forgejo and Bitbucket Cloud: conflicts, approvals, changes requested, CI where available |
 | **FLEET** | every machine's load, memory, swap, disk, agents and alerts, offline detection that ignores Tailscale's flapping bit |
 | **NETWORK** | Tailscale peers and key expiry, live ssh tunnels (`-L`/`-R`/`-D`), your dev ports (⇄ when served through a tunnel) |
@@ -154,11 +156,14 @@ flags unknown settings, with "did you mean…?" suggestions.
 | **AI plans** | Claude (Pro/Max) · Codex (ChatGPT plans) · Cursor · Grok |
 | **Cloud and SaaS** | Cloudflare · Vercel · UptimeRobot · Hetzner · GitHub CI · Sentry · Stripe · Resend · Langfuse · Anthropic, OpenAI, OpenRouter and xAI spend · AWS account at list price, budgets and Cost Explorer (one request a day, opt-in) · Twilio |
 | **Developer machines** | Docker/Podman compose stacks · AWS, GCP and Azure credentials · EC2 instances · GitHub, GitLab, Gitea, Forgejo and Bitbucket Cloud pull requests · VPN and endpoint reachability · Drover agent sessions |
+| **Work tracking** | todos (Badland-compatible API, Drover features and reflections, GitHub issues, todo.txt/Markdown files) · knowledge (a brain's health and newest entries, wikis, links) |
 | **Yours** | `[[custom]]` commands (JSON, lines, Nagios plugins) · Python plugins |
 
 Reference: [host sources](docs/reference/core.md) · [AI plans](docs/reference/ai.md) ·
 [cloud and SaaS](docs/reference/saas.md) · [AWS](docs/reference/aws.md) ·
 [developer machines](docs/reference/dev.md) · [Drover](docs/reference/drover.md) ·
+[todos](docs/reference/todos.md) · [knowledge](docs/reference/knowledge.md) ·
+[the interactive dashboard](docs/interactive.md) · [one fleet view](docs/fleet-consistency.md) ·
 [custom commands and plugins](docs/plugins.md).
 
 `porchlight sources` lists every source and whether it runs on this machine
