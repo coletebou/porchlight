@@ -1,0 +1,68 @@
+{
+  "_comment": "A fictional Voice Gateway work sprint, with one provider (github) off for lack of a token. Times written as \"+N\" / \"-N\" are seconds from the moment the demo loads. Contract: docs/contracts/todo-item-v1.md.",
+  "todos": {
+    "v": 1,
+    "items": [
+      {"id": "badland:bl-2", "provider": "badland", "ref": "bl-2",
+       "title": "V-41 open-source ai-cli: secret-scan, license, CONTRIBUTING", "group": "Voice Gateway",
+       "state": "open", "priority": "urgent", "due": "-300000", "created": "-900000", "updated": "-9000",
+       "url": "https://example.com/todos/vg-list", "tags": ["voice-gateway", "security"], "asks": ["V-41"],
+       "host": "", "can": ["done"]},
+      {"id": "badland:bl-1", "provider": "badland", "ref": "bl-1",
+       "title": "V-43 todos panel: providers, coverage view and write policy", "group": "Voice Gateway",
+       "state": "open", "priority": "high", "due": "-200000", "created": "-700000", "updated": "-5000",
+       "url": "https://example.com/todos/vg-list", "tags": ["voice-gateway"], "asks": ["V-43"], "host": "", "can": ["done"]},
+      {"id": "reflections:r-1", "provider": "reflections", "ref": "r-1",
+       "title": "decide: V-39 shared fleet panels vs per-host MOTD", "group": "porchlight", "state": "open",
+       "priority": "high", "due": null, "created": "-80000", "updated": "-42000", "url": "",
+       "tags": ["decision"], "asks": ["V-39"], "host": "atlas", "can": ["done"]},
+      {"id": "badland:bl-3", "provider": "badland", "ref": "bl-3",
+       "title": "V-50 write the lux-wire v0 contract doc", "group": "Voice Gateway", "state": "open",
+       "priority": "medium", "due": "+200000", "created": "-500000", "updated": "-60000",
+       "url": "https://example.com/todos/vg-list", "tags": ["voice-gateway"], "asks": ["V-50"], "host": "", "can": ["done"]},
+      {"id": "reflections:r-2", "provider": "reflections", "ref": "r-2",
+       "title": "question: V-42 should interactive porchlight merge with an ai-cli TUI", "group": "porchlight",
+       "state": "open", "priority": "medium", "due": null, "created": "-70000", "updated": "-33000", "url": "",
+       "tags": ["question"], "asks": ["V-42"], "host": "gpu-box", "can": ["done"]},
+      {"id": "file:project/todo.txt:3", "provider": "file", "ref": "project/todo.txt:3",
+       "title": "record a wake-word sample set for the edge build", "group": "todo.txt", "state": "open",
+       "priority": "medium", "due": null, "created": "-50000", "updated": "-50000", "url": "", "tags": [],
+       "asks": [], "host": "", "can": []},
+      {"id": "badland:bl-4", "provider": "badland", "ref": "bl-4", "title": "buy oat milk",
+       "group": "Personal errands", "state": "open", "priority": "low", "due": null, "created": "-90000",
+       "updated": "-90000", "url": "", "tags": [], "asks": [], "host": "", "can": ["done"]},
+      {"id": "drover:feat-109", "provider": "drover", "ref": "feat-109",
+       "title": "V-43/V-44 todos: provider isolation, panel, demo and tests", "group": "porchlight",
+       "state": "in-progress", "priority": "none", "due": null, "created": "-250000", "updated": "-700",
+       "url": "", "tags": [], "asks": ["V-43", "V-44"], "host": "", "can": ["done"]},
+      {"id": "drover:feat-110", "provider": "drover", "ref": "feat-110",
+       "title": "V-41 ai-cli SECURITY-AUDIT.md and license check", "group": "ai-cli", "state": "open",
+       "priority": "none", "due": null, "created": "-150000", "updated": "-95000", "url": "", "tags": [],
+       "asks": ["V-41"], "host": "", "can": ["done"]}
+    ],
+    "providers": {
+      "badland": {"ok": true, "open": 4, "ms": 212, "error": ""},
+      "drover": {"ok": true, "open": 2, "ms": 38, "error": ""},
+      "reflections": {"ok": true, "open": 2, "ms": 420, "error": ""},
+      "github": {"ok": false, "open": 0, "ms": 0, "error": "no GitHub token (GH_TOKEN / GITHUB_TOKEN / gh)"},
+      "file": {"ok": true, "open": 1, "ms": 2, "error": ""}
+    },
+    "total": 9,
+    "asks": {
+      "pattern": "\\bV-\\d{2,3}\\b",
+      "ids": {
+        "V-43": {"badland": "open", "drover": "in-progress", "brain": "noted"},
+        "V-41": {"badland": "open", "drover": "open"},
+        "V-50": {"badland": "open"},
+        "V-44": {"drover": "in-progress"},
+        "V-39": {"reflections": "open", "brain": "noted"},
+        "V-42": {"reflections": "open"}
+      },
+      "systems": ["badland", "drover"]
+    },
+    "alerts": [
+      {"sev": "warn", "msg": "overdue (2d): V-41 open-source ai-cli: secret-scan, license, CONTRIBUTING [badland]"},
+      {"sev": "warn", "msg": "overdue (2d8h): V-43 todos panel: providers, coverage view and write policy [badland]"}
+    ]
+  }
+}

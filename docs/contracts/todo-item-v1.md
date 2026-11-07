@@ -82,7 +82,11 @@ recent entries (titles), never by an extra brain query from here.
   pattern finds in any item title (or brain entry title), which systems hold
   it and in what state. `systems` lists the systems the source could read this
   run, so a gap ("V-07 has no GitHub issue") is only claimed for a system that
-  answered. This is the "track every ask" view.
+  answered: the configured `ask_systems`, in that order, kept only when
+  `providers[name].ok` is true this run. The brain only marks asks its newest
+  entries name (`"brain": "noted"`, from the KNOWLEDGE record's `brain.recent`);
+  a few recent titles are not a full read, so `brain` is never in `systems` and
+  no ask is ever "missing" from it. This is the "track every ask" view.
 - `alerts`: `warn` for an item overdue by more than a day with priority high
   or urgent; none for a provider failing (that is a state, shown in the panel).
 
@@ -109,9 +113,9 @@ recent entries (titles), never by an extra brain query from here.
 
 | Provider | Reads | `done` writes | Credentials |
 |---|---|---|---|
-| `badland` | `GET {base_url}/api/todos/lists`, then `GET /api/todos/lists/{id}/items` for each non-archived list with open items; `isCompleted: false` only. `priority` none/low/medium/high maps 1:1; `dueDate` → `due`; url `{web_url}/todos/{listId}` | `POST /api/todos/items/{id}/toggle` | `BADLAND_API_KEY` (Bearer) |
-| `drover` | the local daemon's `events.state` op: features in state `not-started` or `in-progress` (`state` → `open` / `in-progress`); `group` = repo | `features.upsert` with `state: "shipped"` | the daemon's main token file |
-| `reflections` | the daemon's `reflections.list` op, `{all: true, status: "open", kind: "action,question", limit}` | the daemon's `reflections.mark` op, `{op: "done", ids: [id]}` | the daemon's main token file |
+| `badland` | `GET {base_url}/api/todos/lists`, then `GET /api/todos/lists/{id}/items` for each non-archived list with open items; `isCompleted: false` only. `priority` none/low/medium/high maps 1:1; `dueDate` → `due`; url `{web_url}/todos/{listId}` | `GET /api/todos/items/{id}` first, then `POST /api/todos/items/{id}/toggle` only while `isCompleted` is false (toggle is not idempotent, so never blind) | `BADLAND_API_KEY` (Bearer) |
+| `drover` | the local daemon's `events.state` op: features in state `not-started` or `in-progress` (`state` → `open` / `in-progress`); `group` = repo; `url` = the first `http(s)` entry of the feature's `links` | `features.upsert` with `state: "shipped"` | the daemon's main token file |
+| `reflections` | the daemon's `reflections.list` op, `{all: true, status: "open", kind: "action,question", limit}`; Drover's 1-5 `priority` (1 = urgent) maps 1 urgent, 2 high, 3 medium, 4 low, 5 or missing none | the daemon's `reflections.mark` op, `{op: "done", ids: [id]}` | the daemon's main token file |
 | `github` | `GET /search/issues?q=is:open is:issue <query>`; default query `user:<owner> label:<label>` for each configured label | `PATCH /repos/{o}/{r}/issues/{n}` `{state: "closed"}` | `GH_TOKEN`, `GITHUB_TOKEN`, else `gh auth token` |
 | `file` | todo.txt lines or Markdown `- [ ]` checkboxes in configured paths | none (edit the file) | none |
 
@@ -119,7 +123,10 @@ Every write runs only from `porchlight -i`, only with `[interactive] allow_write
 true`, and only after a y/N confirmation (see `porchlight/actions.py`). The
 handlers (`todos.done`) are registered in `porchlight/sources/todos.py`, next to
 the provider clients; the panel only attaches `ui.Action("todos.done", ...)`
-to items whose `can` lists `"done"`.
+to items whose `can` lists `"done"`. A handler checks the item's ref before any
+call: an id-shaped string only (`[A-Za-z0-9][A-Za-z0-9._:-]{0,127}`, no `..`), and
+for GitHub `owner/repo#number`, so a cached record can never steer a request to
+another path.
 
 Every HTTP call goes through `core.http` (its `User-Agent` matters: a
 Cloudflare-fronted API answers 403 to Python's default one).
