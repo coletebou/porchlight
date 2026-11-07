@@ -79,12 +79,12 @@ through the item's own system:
 
 | Provider | Done means |
 |---|---|
-| `files` | the line gets `x <today> ` in place (an atomic rewrite that keeps the file's mode); a line that changed meanwhile is left alone |
-| `github` | the issue is closed as completed (token, else `gh issue close`) |
+| `files` | the line gets `x <today> ` in place: an atomic rewrite that keeps the file's mode and, through a symlink, rewrites the real file. A line that changed meanwhile is left alone. The record holds a hash of the line, never the line |
+| `github` | the issue is closed as completed (token, else `gh issue close`); a pull request is never closed from here |
 | `drover` | the feature is marked shipped |
 | `reflections` | the reflection is marked done, with a note that porchlight did it |
 | `badland` | the todo is completed, with `badland_write_key_env` (default `BADLAND_API_KEY`); it re-checks that the item is still open first, because Badland's endpoint toggles |
-| `command` | `done_command` runs with `{id}` shell-quoted |
+| `command` | `done_command` runs with `{id}` shell-quoted (items without an `id` are refused) |
 
 After a done, the item is dropped from the local record at once, and a
 background refresh of the source starts. On a peer that shows the hub's list,
