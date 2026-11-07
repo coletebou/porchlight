@@ -49,7 +49,10 @@ DEFAULTS = {
     "alerts": {"ignore": [], "ignore_units": ["motd-news.service"], "peer_max_age": 1800},
     "collector": {"deadline": 50, "workers": 10, "login_refresh": True, "interval": 300, "spawn_gap": 30},
     "fleet": {"peers": [], "order": [], "labels": {}, "ssh_options": [], "connect_timeout": 6, "push_timeout": 25,
-              "remote_cache": "", "badge": ""},
+              "remote_cache": "", "badge": "",
+              # One fleet view: the hub's shared_panels ride in its bundle and every peer of the same
+              # identity shows them, in that order, after its own local panels (docs/fleet-consistency.md).
+              "shared_panels": [], "adopt_layout": True, "hub": "", "stale_after": 900},
     "system": {"mounts": [], "mount_labels": {}},
     "services": {"systemd": [], "systemd_user": [], "launchd": [], "auto": True, "optional": [], "remote_login": True},
     "ports": [],
