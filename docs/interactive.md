@@ -76,6 +76,7 @@ installed gets a message, not a crash.
 
 The top line says where the fleet panels come from and how old they are
 (`fleet view hub 2m`). On a peer that shows the hub's todos and holds none of
-the credentials, `d` runs `porchlight todos done <key> --yes` on the hub over
-ssh. The prompt says `via hub`. See
+the credentials, `d` runs `porchlight todos done <key> --yes --exact` on the
+hub over ssh, after the `y/N` here (the prompt says `via hub`); `--exact` keeps
+the hub from reading the key as a prefix of another item. See
 [fleet-consistency.md](fleet-consistency.md).

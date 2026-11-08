@@ -64,7 +64,7 @@ V-04     ✔         -         ✔         2 open
 ```
 porchlight todos                 every open todo (cached), grouped by system
 porchlight todos asks            ask coverage: which systems each ask id is in
-porchlight todos done <key>      mark one done in its own system   [--yes] [--via-hub]
+porchlight todos done <key>      mark one done in its own system   [--yes] [--via-hub] [--exact]
 porchlight todos --json          the items as JSON
 ```
 
@@ -88,8 +88,15 @@ through the item's own system:
 
 After a done, the item is dropped from the local record at once, and a
 background refresh of the source starts. On a peer that shows the hub's list,
-`--via-hub` (and `d` in `porchlight -i`, automatically) runs the same command
-on the hub over ssh, where the credentials are.
+`--via-hub` (and `d` in `porchlight -i`, automatically) asks `y/N` on the peer,
+then runs `porchlight todos done <key> --yes --exact` on the hub over ssh, where
+the credentials are. `--exact` makes the hub take the key whole, never as a
+prefix: if the item is gone on the hub, nothing else is completed in its place.
+
+An item whose id came in shaped like a credential (a provider or a `command`
+that puts a token in `id`) is shown with the id masked, and porchlight does not
+store the raw id anywhere, so it cannot complete that item: do it in its own
+system.
 
 ## Keeping another identity's items out
 

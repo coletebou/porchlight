@@ -672,6 +672,19 @@ class Masking(Base):
         self.assertTrue(it["url"].startswith("https://"))
         self.assertIn("host.example/p?x=1", it["url"])
 
+    def test_a_token_shaped_id_is_never_stored_raw(self):
+        out = json.dumps([{"id": GHTOK, "title": "Has a token for an id"}, {"id": "plain-7", "title": "Fine"}])
+        data = self.run_src('command = "x"', run=Runner((0, out, "")))
+        self.assertNotIn(GHTOK, json.dumps(data))  # not in the key, the id, nor the action handle
+        by = {i["title"]: i for i in data["items"]}
+        bad, ok = by["Has a token for an id"], by["Fine"]
+        self.assertEqual(bad["ref"], {"masked": True})
+        self.assertEqual(ok["ref"], {"id": "plain-7"})
+        # Drover feature ids too; a files handle (a 64-hex line hash) is not an id and stays
+        self.assertEqual(S.item("drover", SKTOK, "t", ref={"fid": SKTOK})["ref"], {"masked": True})
+        sha = "a" * 64
+        self.assertEqual(S.item("files", "1", "t", ref={"path": "p", "sha": sha})["ref"], {"path": "p", "sha": sha})
+
     def test_control_characters_are_stripped(self):
         title = "a\x00b\x07c\x1b[2Jd\x9fe\nf\tg\x7fh"
         it = S.item("command", "i\x1bd", title, repo="r\x00", labels=["l\x07"])
@@ -805,6 +818,16 @@ class Act(Base):
         with self.assertRaises(S.ActionError) as cm:
             S.act(self.act_host('done_command = "tracker close {id}"'), it, "done", env={}, runner=run)
         self.assertIn("no id", str(cm.exception))
+        self.assertEqual(run.calls, [])
+
+    def test_an_item_whose_id_was_masked_is_refused(self):
+        run, http = Runner((0, "", "")), FakeHTTP({})
+        for prov in ("command", "badland", "reflections", "drover"):
+            it = {"provider": prov, "key": prov + ":ghp_…", "ref": {"masked": True}}
+            with self.assertRaises(S.ActionError) as cm:
+                S.act(self.act_host('done_command = "tracker close {id}"'), it, "done", env={"BADLAND_API_KEY": "w"},
+                      runner=run, http=http)
+            self.assertIn("shaped like a credential", str(cm.exception))
         self.assertEqual(run.calls, [])
 
     def test_files_missing_file_is_an_action_error(self):
@@ -968,6 +991,14 @@ class Find(unittest.TestCase):
         self.assertEqual(S.find(self.ITEMS, "abcdef")["id"], "abcdef1234")
         self.assertEqual(S.find(self.ITEMS, "drover")["id"], "f-1")
         self.assertEqual(S.find(self.ITEMS, "f-")["id"], "f-1")
+
+    def test_exact_only_never_takes_a_prefix(self):
+        self.assertEqual(S.find(self.ITEMS, "github:o/r#1", exact_only=True)["id"], "o/r#1")
+        gone = [i for i in self.ITEMS if i["key"] != "github:o/r#1"]
+        self.assertEqual(S.find(gone, "github:o/r#1")["id"], "o/r#10")  # the trap exact_only closes
+        with self.assertRaises(S.ActionError) as cm:
+            S.find(gone, "github:o/r#1", exact_only=True)
+        self.assertIn("no todo github:o/r#1", str(cm.exception))
 
     def test_ambiguous_and_missing(self):
         with self.assertRaises(S.ActionError) as cm:
@@ -1319,6 +1350,36 @@ class Cli(Base):
         rc, out, err = self.main("todos", "done", self.keys()["second thing"], "--via-hub")
         self.assertEqual(rc, 2)
         self.assertIn("no hub known", err)
+
+    def test_via_hub_asks_first_and_sends_the_whole_key_exactly(self):
+        from porchlight import todo_cmd
+        key = self.keys()["second thing"]
+        with mock.patch.object(todo_cmd, "hub_name", return_value="hubbox"), \
+                mock.patch.object(core, "run", return_value=(0, "ok\n", "")) as run:
+            rc, out, err = self.main("todos", "done", key[:12], "--via-hub")  # no tty, no --yes
+            self.assertEqual(rc, 2)
+            self.assertIn("not a terminal; pass --yes", err)
+            rc, out, _ = self.main("todos", "done", key[:12], "--via-hub", stdin=Tty("n\n"))
+            self.assertEqual(rc, 1)
+            self.assertIn("via hubbox", out)
+            self.assertEqual(run.call_count, 0)
+            rc, out, _ = self.main("todos", "done", key[:12], "--via-hub", stdin=Tty("y\n"))
+        self.assertEqual(rc, 0)
+        argv = run.call_args[0][0]
+        self.assertEqual(argv, todo_cmd.hub_argv("hubbox", key))  # the full key, not the typed prefix
+        self.assertEqual(shlex.split(argv[-1]), ["porchlight", "todos", "done", key, "--yes", "--exact"])
+        self.assertEqual(slurp(self.todo).count("x "), 0)  # the hub acts; this machine changed nothing
+
+    def test_exact_refuses_a_prefix_on_the_acting_machine(self):
+        key = self.keys()["second thing"]
+        before = slurp(self.todo)
+        rc, out, err = self.main("todos", "done", key[:12], "--yes", "--exact")
+        self.assertEqual(rc, 2)
+        self.assertIn("no todo %s" % key[:12], err)
+        self.assertEqual(slurp(self.todo), before)
+        rc, out, _ = self.main("todos", "done", key, "--yes", "--exact")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("x %s second thing" % TODAY, slurp(self.todo))
 
     def test_forget_leaves_other_records_and_survives_a_missing_one(self):
         from porchlight import todo_cmd

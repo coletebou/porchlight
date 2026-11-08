@@ -97,9 +97,23 @@ def item(provider, ident, title, url="", status="open", prio=5, due=0, repo="", 
            "status": clean(status, 20) or "open", "prio": _prio(prio), "due": _epoch(due), "repo": clean(repo, 60),
            "labels": [clean(x, 30) for x in list(labels or [])[:8]], "kind": clean(kind, 20), "updated": _epoch(updated)}
     if ref:
-        out["ref"] = ref
+        out["ref"] = _safe_ref(ref)
     if match:
         out["_match"] = str(match)[:4000]
+    return out
+
+
+def _safe_ref(ref: dict) -> dict:
+    """The action handle, minus any id a provider handed over in a credential's shape. The
+    display id is masked already, but the handle is stored and pushed to every peer too, so
+    a token-shaped id is dropped here (the item is then marked `masked` and cannot be acted
+    on from porchlight) rather than kept raw."""
+    out = dict(ref)
+    for k in ("id", "fid"):
+        v = out.get(k)
+        if isinstance(v, str) and secrets.mask_shapes(v) != v:
+            del out[k]
+            out["masked"] = True
     return out
 
 
@@ -392,11 +406,16 @@ class ActionError(Exception):
     pass
 
 
-def find(items, key: str):
-    """An item by its full key, or by a unique prefix of the key or of its id."""
+def find(items, key: str, exact_only: bool = False):
+    """An item by its full key, or (unless exact_only) by a unique prefix of the key or of
+    its id. A machine acting for another one (the hub, for a peer) passes exact_only: the
+    peer named one item, and a prefix could land on a different one once that item is gone
+    (`github:o/r#1` → `github:o/r#12`)."""
     exact = [i for i in items if i.get("key") == key]
     if exact:
         return exact[0]
+    if exact_only:
+        raise ActionError("no todo %s (gone already, or not in this machine's list)" % key)
     cands = [i for i in items if str(i.get("key", "")).startswith(key) or str(i.get("id", "")).startswith(key)]
     if len(cands) == 1:
         return cands[0]
@@ -420,6 +439,9 @@ def act(host, it: dict, verb: str, env=None, runner=None, http=None) -> str:
         ctx.http = http
     ref = it.get("ref") or {}
     prov = it.get("provider")
+    if ref.get("masked"):
+        raise ActionError("%s's id is shaped like a credential, so porchlight never stored it: "
+                          "complete it in its own system (%s)" % (it.get("key"), prov))
     if prov == "files":
         return _done_file(ref)
     if prov == "github" and it.get("kind") == "pr":

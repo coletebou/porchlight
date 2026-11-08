@@ -13,7 +13,7 @@ from . import core, theme as T
 
 USAGE = """porchlight todos                 every open todo (cached), grouped by system
 porchlight todos asks            ask coverage: which systems each ask id is in
-porchlight todos done <key>      mark one done in its own system   [--yes] [--via-hub]
+porchlight todos done <key>      mark one done in its own system   [--yes] [--via-hub] [--exact]
 porchlight todos --json          the items as JSON"""
 
 
@@ -74,28 +74,32 @@ def run(host, cache, args, flags) -> int:
 def done(host, cache, key, flags) -> int:
     from .sources import todos as S
     try:
-        it = S.find(_items(cache), key)
+        # --exact: another machine named this item (hub_argv), so a prefix must never stand in for it.
+        it = S.find(_items(cache), key, exact_only="--exact" in flags)
     except S.ActionError as e:
         print("porchlight: %s" % e, file=sys.stderr)
         return 2
+    hub = ""
     if "--via-hub" in flags:
         hub = hub_name(host, cache)
         if not hub:
             print("porchlight: no hub known (set [fleet] hub or wait for a bundle)", file=sys.stderr)
             return 2
-        rc, out, err = core.run(hub_argv(hub, str(it["key"])), timeout=40)
-        sys.stdout.write(out)
-        sys.stderr.write(err)
-        return rc
     print("%s %s %s" % (T.c("done?", "amber", bold=True), it.get("title"), T.dim("[%s]" % it.get("key"))))
     sys.stdout.flush()
     if "--yes" not in flags and "-y" not in flags:
         if not sys.stdin.isatty():
             print("porchlight: not a terminal; pass --yes to confirm", file=sys.stderr)
             return 2
-        if input("mark done in %s? [y/N] " % it.get("provider")).strip().lower() not in ("y", "yes"):
+        where = it.get("provider") + (" via %s" % hub if hub else "")
+        if input("mark done in %s? [y/N] " % where).strip().lower() not in ("y", "yes"):
             print("unchanged")
             return 1
+    if hub:  # asked here, so the hub runs it with --yes, on exactly this key
+        rc, out, err = core.run(hub_argv(hub, str(it["key"])), timeout=40)
+        sys.stdout.write(out)
+        sys.stderr.write(err)
+        return rc
     try:
         what = S.act(host, it, "done")
     except S.ActionError as e:
@@ -143,7 +147,9 @@ def via_hub(host, cache) -> str:
 
 
 def hub_argv(hub: str, key: str) -> list:
-    """`porchlight todos done <key> --yes` on the hub, over the same ssh the fleet push uses."""
+    """`porchlight todos done <key> --yes --exact` on the hub, over the same ssh the fleet push
+    uses. The caller has asked y/N already; --exact keeps the hub from taking the key as a
+    prefix of some other item when this one is gone there."""
     import shlex  # ssh hands the remote shell one string: quote the key, never trust its characters
     return [core.which("ssh") or "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=6", hub,
-            "porchlight todos done %s --yes" % shlex.quote(key)]
+            "porchlight todos done %s --yes --exact" % shlex.quote(key)]
