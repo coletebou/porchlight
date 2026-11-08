@@ -333,6 +333,24 @@ def qotd(host) -> str:
     return lines[datetime.date.today().toordinal() % len(lines)]
 
 
+def fleet_view(host, cache) -> str:
+    """'fleet view hub 3m' on a peer that renders the hub's bundle: where the shared part
+    of the screen comes from and how old it is (amber once older than fleet.stale_after)."""
+    if host.hub:
+        return ""
+    b = cache.bundle if isinstance(cache.bundle, dict) else {}
+    try:
+        ts = float(b.get("ts") or 0)
+    except (TypeError, ValueError):
+        ts = 0.0
+    if not ts:
+        return ""
+    age = max(0.0, core.now() - ts)
+    stale = float(host.cfg.get("fleet.stale_after", 900) or 0)
+    text = "fleet view %s %s" % (str(b.get("label") or b.get("from") or "hub")[:24], core.human_age(age))
+    return T.c(text, "amber") if stale and age > stale else T.dim(text)
+
+
 def footer(host, cache, W, t0) -> list:
     fc = host.cfg.table("footer")
     out = []
@@ -349,6 +367,9 @@ def footer(host, cache, W, t0) -> list:
         left = T.dim("porchlight ") + T.dim(" · ").join(T.c(cmd, "slate") for cmd in tuple(host.hints) + ("-h",))
     if fc.get("timing", True):
         right = T.dim("rendered %dms" % int((time.monotonic() - t0) * 1000))
+    view = fleet_view(host, cache)
+    if view and fc.get("fleet_view", True):
+        right = view + (T.dim(" · ") + right if right else "")
     if left or right:
         gap = W - 1 - T.width(left) - T.width(right)
         out.append(" " + T.fit(left + (" " * gap + right if gap > 2 else ""), W - 1))
@@ -389,6 +410,30 @@ def compact_mode(host, W, only) -> bool:
     return int(host.cfg.get("layout.compact_width", 100)) > W
 
 
+def shared_panels(host, cache) -> list:
+    """The fleet's shared panels as this machine shows them: the hub's own [fleet]
+    shared_panels, or, on a peer, the list in the hub's bundle (the hub decides, so one edit
+    there changes every screen) when the bundle is from the same identity and the peer has
+    not set adopt_layout = false. A peer with no bundle yet falls back to its own setting."""
+    if host.hub or not host.cfg.get("fleet.adopt_layout", True):
+        return list(host.shared_panels)
+    b = cache.bundle if isinstance(cache.bundle, dict) else {}
+    lay = b.get("layout") if isinstance(b.get("layout"), dict) else {}
+    shared = lay.get("shared")
+    if isinstance(shared, list) and b.get("identity", host.identity) == host.identity:
+        return [str(k) for k in shared if isinstance(k, str)]
+    return list(host.shared_panels)
+
+
+def panel_keys(host, cache) -> list:
+    """Local panels first (this machine's own: vitals, services, its repos), then the shared
+    fleet panels in the fleet's order, so the fleet part reads the same on every machine."""
+    shared = shared_panels(host, cache)
+    if not shared:
+        return list(host.panels)
+    return [k for k in host.panels if k not in shared] + shared
+
+
 def build_panels(ctx, keys) -> list:
     from . import panels
     built = []
@@ -416,7 +461,7 @@ def render(host, cache, width=None, only=None, login=False, compact=None) -> str
     compact = compact_mode(host, W, only) if compact is None else compact
     _, cw = layout(W, host.cfg)
     ctx = RCtx(host, cache, lv, al, cw, last_seen)
-    keys = only or host.panels
+    keys = only or panel_keys(host, cache)
     if not only:
         extra = panels.custom_keys(host)
         if host.auto_panels:  # plugin panels too, after the built-ins, whenever they have data
@@ -436,7 +481,7 @@ def render(host, cache, width=None, only=None, login=False, compact=None) -> str
     if not only:
         out.append("")
         if compact:
-            hidden = any(k not in keys and k in panels.BUILDERS for k in host.panels)
+            hidden = any(k not in keys and k in panels.BUILDERS for k in panel_keys(host, cache))
             out.append(" " + T.fit(T.dim("compact view · ") + T.c("porchlight all", "slate") +
                                    T.dim(" for %s" % ("every panel" if hidden else "the full layout") + " (or widen the window)"), W - 1))
         else:

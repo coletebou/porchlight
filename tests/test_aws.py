@@ -746,11 +746,13 @@ class CostExplorer(Base):
     def test_the_switch_failures_and_retries_never_add_a_request(self):
         f = self.fake(ce=ce_reply())
         self.assertEqual(self.run_cost(toml=TOML), {"off": True})                  # the default: off
-        self.assertEqual(registry.state(registry.SOURCES["aws_cost"], host(TOML)), "opt-in")
-        self.assertEqual(registry.state(registry.SOURCES["aws_cost"], host(CE_ON)), "on")
-        self.assertEqual(registry.state(registry.SOURCES["aws_cost"], host(TOML + "cost_explorer = true\n")), "on")  # 0.1.0 configs
-        self.assertEqual(registry.state(registry.SOURCES["aws_cost"], host(CE_ON + "[sources.aws_cost]\nenabled = false\n")),
-                         "disabled")
+        # The switch logic, not this machine's PATH: pretend the aws CLI is installed.
+        with mock.patch("porchlight.core.which", lambda b, *a, **k: "/usr/bin/" + b):
+            self.assertEqual(registry.state(registry.SOURCES["aws_cost"], host(TOML)), "opt-in")
+            self.assertEqual(registry.state(registry.SOURCES["aws_cost"], host(CE_ON)), "on")
+            self.assertEqual(registry.state(registry.SOURCES["aws_cost"], host(TOML + "cost_explorer = true\n")), "on")  # 0.1.0
+            self.assertEqual(registry.state(registry.SOURCES["aws_cost"], host(CE_ON + "[sources.aws_cost]\nenabled = false\n")),
+                             "disabled")
         self.assertEqual(f.calls, [])
         f.sts_ok = ()
         d = self.run_cost(prev={"mtd": 1.0, "tried_at": utc(2026, 10, 26, 12)})

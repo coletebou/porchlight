@@ -100,3 +100,10 @@ cat "$d/snapshot.json" 2>/dev/null || true
 
 If a peer uses a non-default cache directory, set `fleet.remote_cache` on the
 hub. Files are written mode 0600 in a 0700 directory.
+
+## One fleet view
+
+The hub can also decide which panels every peer shows after its own local
+ones (`[fleet] shared_panels`), and peers say how old that view is. See
+[fleet-consistency.md](fleet-consistency.md) for the recommendation and the
+settings (`shared_panels`, `adopt_layout`, `hub`, `stale_after`).

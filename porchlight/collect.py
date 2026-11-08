@@ -170,13 +170,14 @@ def collect(host, force=False, only=None, quiet=True) -> int:
     return 0
 
 
-def spawn_background(host) -> bool:
+def spawn_background(host, only=None) -> bool:
     """Fire-and-forget `porchlight collect` from the login render
     (stale-while-revalidate). Rate-limited, so twenty tmux panes opening at
-    once start one collector."""
+    once start one collector. `only` (source names) forces a refresh of just
+    those, skipping the rate limit: after an action changed them."""
     import subprocess
     stamp = os.path.join(core.STATE_DIR, "last_spawn")
-    gap = float(host.cfg.get("collector.spawn_gap", 30))
+    gap = 0.0 if only else float(host.cfg.get("collector.spawn_gap", 30))
     if core.now() - core.mtime(stamp) < gap or not lock_free():
         return False
     try:
@@ -184,7 +185,8 @@ def spawn_background(host) -> bool:
         with open(stamp, "w") as f:
             f.write(str(int(core.now())))
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        code = "import sys; sys.path.insert(0, %r); from porchlight.cli import main; sys.exit(main(['collect', '--quiet']))" % root
+        args = ["collect", "--quiet"] + (["--force", "--only", ",".join(only)] if only else [])
+        code = "import sys; sys.path.insert(0, %r); from porchlight.cli import main; sys.exit(main(%r))" % (root, args)
         logf = open(core.LOG_PATH, "a")  # noqa: SIM115 — handed to the detached child
         env = dict(os.environ, PORCHLIGHT_HOST=host.name, PORCHLIGHT_CACHE_DIR=core.CACHE_DIR)
         if host.cfg.path and host.cfg.path != "<string>":

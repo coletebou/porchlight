@@ -229,4 +229,33 @@ def p_drover(x):
     parts = ["%d host%s" % (hosts, "" if hosts == 1 else "s") if hosts else "", "%d working" % busy if busy else "",
              "%d idle" % idle if idle else ""]
     note = stale or fitted([p for p in parts if p], x.cw - 16)  # the title, its mark and a stretch of rule
-    return Panel("drover", "DROVER", rows, lvl, T.strip(note))
+    return Panel("drover", "DROVER", rows, lvl, T.strip(note), items=tui_items(x, d))
+
+
+def tui_items(x, d) -> list:
+    """The sessions as the interactive dashboard's rows: waiting first (with what they ask),
+    then working, then what finished. "attach" jumps to the session's tmux pane."""
+    out = []
+    for kind, glyph, color, key in (("waiting", "⏸", "amber", "waiting"), ("working", "▶", "sky", "working")):
+        for w in _l(d.get(key)):
+            host = _host(x, w.get("host"))
+            name = _s(w.get("name")) or "?"
+            ask = _s(w.get("ask"), 400)
+            det = [T.c(name, "fg", bold=True) + T.dim("  %s · %s · %s" % (kind, host, _s(w.get("engine"), 16) or "?")), ""]
+            if ask:
+                det += [T.dim("asks"), ask, ""]
+            if w.get("id"):
+                det.append(kv("session", _s(w.get("id"), 64), W))
+            out.append({"key": "drover:%s" % (_s(w.get("id"), 64) or name), "source": "drover",
+                        "text": T.c(glyph, color) + " " + name + T.dim(" " + host) + ((SEP + T.dim(ask)) if ask else ""),
+                        "detail": det, "actions": ["attach", "drover"] if w.get("id") else ["drover"],
+                        "raw": {"id": w.get("id"), "host": w.get("host"), "name": name}})
+    for f in _l(d.get("feed"))[:10]:
+        name = _s(f.get("name")) or "?"
+        out.append({"key": "drover-feed:%s:%s" % (_s(f.get("sid"), 24), _s(f.get("kind"), 10)), "source": "drover",
+                    "text": T.c("✔" if f.get("kind") == "finished" else T.g("crit"), "green" if f.get("kind") == "finished"
+                                else "red") + " " + name + T.dim(" %s %s" % (_host(x, f.get("host")), _age(f.get("at")))),
+                    "detail": [T.c(name, "fg", bold=True) + T.dim("  %s on %s, %s ago" % (
+                        _s(f.get("what")), _host(x, f.get("host")), _age(f.get("at")))), "", _s(f.get("text"), 600)],
+                    "actions": ["drover"], "raw": {}})
+    return out

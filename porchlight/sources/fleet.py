@@ -37,7 +37,11 @@ def build_bundle(host, peers_prev: dict) -> dict:
     own = core.read_json(core.SNAPSHOT_PATH)
     if own:
         hosts[host.name] = {"ok": True, "seen": own.get("ts", core.now()), "snap": own}
-    return {"v": 1, "from": host.name, "ts": core.now(), "sources": srcs, "fleet": {"hosts": hosts}}
+    out = {"v": 1, "from": host.name, "label": host.label, "identity": host.identity, "ts": core.now(),
+           "sources": srcs, "fleet": {"hosts": hosts}}
+    if host.shared_panels:
+        out["layout"] = {"shared": list(host.shared_panels)}
+    return out
 
 
 def exchange(peer: str, payload: bytes, cfg) -> dict:

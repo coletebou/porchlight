@@ -41,7 +41,7 @@ DEFAULTS = {
         "attention": 10, "attention_compact": 5,
     },
     "header": {"weather": True, "ips": True, "last_visit": True, "user": False},
-    "footer": {"quote": True, "qotd": True, "hints": True, "timing": True, "quotes_file": "", "qotd_file": ""},
+    "footer": {"quote": True, "qotd": True, "hints": True, "timing": True, "fleet_view": True, "quotes_file": "", "qotd_file": ""},
     "thresholds": {
         "disk_warn": 85, "disk_crit": 92, "mem_warn": 92, "mem_crit": 98,
         "swap_warn": 80, "swap_crit": 95, "load_warn": 1.0, "load_crit": 2.0,
@@ -49,7 +49,13 @@ DEFAULTS = {
     "alerts": {"ignore": [], "ignore_units": ["motd-news.service"], "peer_max_age": 1800},
     "collector": {"deadline": 50, "workers": 10, "login_refresh": True, "interval": 300, "spawn_gap": 30},
     "fleet": {"peers": [], "order": [], "labels": {}, "ssh_options": [], "connect_timeout": 6, "push_timeout": 25,
-              "remote_cache": "", "badge": ""},
+              "remote_cache": "", "badge": "",
+              # One fleet view: the hub's shared_panels ride in its bundle and every peer of the same
+              # identity shows them, in that order, after its own local panels (docs/fleet-consistency.md).
+              "shared_panels": [], "adopt_layout": True, "hub": "", "stale_after": 900},
+    # porchlight -i (docs/interactive.md). programs: one key → an argv run full-screen, merged over
+    # the built-in D (drover tui) and A (ai-cli's TUI); an empty list turns a key off.
+    "interactive": {"refresh": 5, "programs": {}},
     "system": {"mounts": [], "mount_labels": {}},
     "services": {"systemd": [], "systemd_user": [], "launchd": [], "auto": True, "optional": [], "remote_login": True},
     "ports": [],
