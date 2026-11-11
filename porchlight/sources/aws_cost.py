@@ -14,13 +14,27 @@ hub asks: a peer whose hub is alive never does, forced or not, and takes the sou
 over only after the hub's copy is three days old.
 
 The one request: daily unblended cost by service, from the first of the month (or
-two weeks back, early in a month) through today (today is partial). The month's
-total, the daily trend and the spend by service render in the AWS panel; the hourly
-run-rate there is the free aws_account source's. Off unless [sources.aws_account]
-cost_explorer = "daily".
+two weeks back, early in a month) through today (today is partial). It carries a
+second --group-by dimension at no extra charge (one request stays one request):
+USAGE_TYPE by default, which breaks the opaque "EC2 - Other" and EC2 compute
+buckets into EBS, snapshots, NAT gateways, public IPv4/idle EIPs and data
+transfer; set [sources.aws_account] cost_detail = "region" or "linked_account"
+to trade that for a top-list by region or account instead ("none" drops the
+second dimension). The month's total, the daily trend and the spend by service
+render in the AWS panel; the hourly run-rate there is the free aws_account
+source's.
+
+cost_forecast = true adds a second, genuinely extra request the same day:
+GetCostForecast for the rest of the month, folded into the panel's forecast in
+place of the cheaper per_day() estimate. That makes two $0.01 requests on a day
+both run (about $0.60/month instead of $0.30); forecast_query()'s own failure
+never costs the base reading, already fetched that day.
+
+Off unless [sources.aws_account] cost_explorer = "daily".
 """
 from __future__ import annotations
 
+import calendar
 import os
 import re
 import time
@@ -36,6 +50,19 @@ MAX_GAP = 36 * 3600
 FALLBACK = 3 * 86400    # a peer takes over once the hub's copy is this old
 TREND_DAYS = 14
 ONE_ATTEMPT = {"AWS_MAX_ATTEMPTS": "1", "AWS_RETRY_MODE": "standard"}  # a retried request is billed too
+# The second --group-by dimension: free (one request either way). "none" drops it.
+DETAIL_DIMS = {"usage_type": "USAGE_TYPE", "region": "REGION", "linked_account": "LINKED_ACCOUNT"}
+# USAGE_TYPE strings carry a region prefix ("USE1-", "EUC1-APS1-", ...) before the part that
+# names what is billed; order matters, since a snapshot's usage type also contains "EBS:".
+USAGE_BUCKETS = (
+    (re.compile(r"EBS:SnapshotUsage", re.I), "snapshot"),
+    (re.compile(r"EBS:", re.I), "ebs"),
+    (re.compile(r"NatGateway", re.I), "nat_gateway"),
+    (re.compile(r"PublicIPv4|ElasticIP", re.I), "public_ipv4"),
+    (re.compile(r"DataTransfer|-In-Bytes$|-Out-Bytes$|-Regional-Bytes$", re.I), "data_transfer"),
+)
+# The two services the USAGE_TYPE detail breaks down (the rest keep only their service total).
+USAGE_SERVICES = ("EC2 - Other", "Amazon Elastic Compute Cloud - Compute")
 # The buckets the aws_account run-rate models: instances (and dedicated hosts); EBS, inside
 # EC2-Other, which also holds snapshots, NAT gateways and transfer; public IPv4, under VPC.
 # Everything else is "other". The forecast takes per bucket the larger of the model and CE.
@@ -137,12 +164,35 @@ def short(name: str) -> str:
     return out or (words[0][:18] if words else "?")
 
 
-def query(ask, now: float) -> dict:
-    """The day's one request. ask(args) runs `aws ce ...`."""
+def usage_bucket(usage_type: str) -> str:
+    """A USAGE_TYPE string, classified: ebs, snapshot, nat_gateway, public_ipv4, data_transfer,
+    or other (instance-hours and anything porchlight does not know yet)."""
+    for pat, name in USAGE_BUCKETS:
+        if pat.search(usage_type or ""):
+            return name
+    return "other"
+
+
+def month_end_str(now: float) -> str:
+    """The first day of next month, UTC, as Cost Explorer wants it (End is exclusive)."""
+    y, m = time.gmtime(now)[:2]
+    ny, nm = (y + 1, 1) if m == 12 else (y, m + 1)
+    return time.strftime("%Y-%m-%d", time.gmtime(calendar.timegm((ny, nm, 1, 0, 0, 0))))
+
+
+def query(ask, now: float, detail: str = "usage_type") -> dict:
+    """The day's one request. ask(args) runs `aws ce ...`. A second --group-by dimension
+    rides along at no extra charge: USAGE_TYPE breaks EC2 and EC2-Other down further
+    ("usage_types" in the result), "region"/"linked_account" instead give a top list
+    under "group"; "none" (or anything else) drops the second dimension."""
     start, end, month = window(now)
+    group_by = ["Type=DIMENSION,Key=SERVICE"]
+    dim = DETAIL_DIMS.get(detail)
+    if dim:
+        group_by.append("Type=DIMENSION,Key=%s" % dim)
     out = ask(["ce", "get-cost-and-usage", "--time-period", "Start=%s,End=%s" % (start, end), "--granularity", "DAILY",
-               "--metrics", "UnblendedCost", "--group-by", "Type=DIMENSION,Key=SERVICE", "--no-paginate"])
-    days, svc, by, estimated = {}, {}, {}, False
+               "--metrics", "UnblendedCost", "--group-by"] + group_by + ["--no-paginate"])
+    days, svc, by, usage_types, groups, estimated = {}, {}, {}, {}, {}, False
     results = out.get("ResultsByTime") if isinstance(out, dict) else None
     for r in results if isinstance(results, list) else []:
         if not isinstance(r, dict):
@@ -153,9 +203,10 @@ def query(ask, now: float) -> dict:
         estimated = estimated or bool(r.get("Estimated"))
         days.setdefault(d, 0.0)
         for g in r.get("Groups") or []:
+            keys = g.get("Keys") or []
             try:
                 usd = float(g["Metrics"]["UnblendedCost"]["Amount"])
-                name = str((g.get("Keys") or ["?"])[0])
+                name = str(keys[0] if keys else "?")
             except (KeyError, IndexError, TypeError, ValueError):
                 continue
             days[d] += usd
@@ -163,16 +214,47 @@ def query(ask, now: float) -> dict:
                 svc[name] = svc.get(name, 0.0) + usd
             bucket = by.setdefault(BUCKETS.get(name, "other"), {})
             bucket[d] = bucket.get(d, 0.0) + usd
+            if dim and len(keys) > 1 and d >= month:
+                detail_key = str(keys[1])
+                if dim == "USAGE_TYPE" and name in USAGE_SERVICES:
+                    ub = usage_bucket(detail_key)
+                    usage_types[ub] = usage_types.get(ub, 0.0) + usd
+                elif dim != "USAGE_TYPE":
+                    groups[detail_key] = groups.get(detail_key, 0.0) + usd
     if not days:
         raise ValueError("Cost Explorer returned no days")
     full = [d for d in sorted(days) if d < _day(now)][-7:]  # complete days only
     top = sorted(((short(k), round(v, 2)) for k, v in svc.items() if round(v, 2)), key=lambda kv: -kv[1])
-    return {"month": month[:7], "start": start, "through": max(days), "estimated": estimated,
-            "mtd": round(sum(v for d, v in days.items() if d >= month), 2),
-            "days": [[d, round(days[d], 2)] for d in sorted(days)][-(TREND_DAYS + 1):],
-            "services": [list(kv) for kv in top[:8]],
-            "per_day": {b: round(sum(v.get(d, 0.0) for d in full) / len(full), 4) for b, v in sorted(by.items())} if full else {},
-            "partial": bool(isinstance(out, dict) and out.get("NextPageToken"))}
+    out_rec = {"month": month[:7], "start": start, "through": max(days), "estimated": estimated,
+               "mtd": round(sum(v for d, v in days.items() if d >= month), 2),
+               "days": [[d, round(days[d], 2)] for d in sorted(days)][-(TREND_DAYS + 1):],
+               "services": [list(kv) for kv in top[:8]],
+               "per_day": {b: round(sum(v.get(d, 0.0) for d in full) / len(full), 4) for b, v in sorted(by.items())} if full else {},
+               "partial": bool(isinstance(out, dict) and out.get("NextPageToken")),
+               "detail": "usage_type" if dim == "USAGE_TYPE" else ("none" if not dim else detail)}
+    if dim == "USAGE_TYPE":
+        out_rec["usage_types"] = {k: round(v, 2) for k, v in sorted(usage_types.items()) if round(v, 2)}
+    elif dim:
+        out_rec["group"] = [list(kv) for kv in sorted(((k, round(v, 2)) for k, v in groups.items() if round(v, 2)),
+                                                       key=lambda kv: -kv[1])[:8]]
+    return out_rec
+
+
+def forecast_query(ask, now: float):
+    """CE's own GetCostForecast for the rest of this month (tomorrow through the
+    month's end), MONTHLY UNBLENDED_COST: one more $0.01 request, asked only when
+    cost_forecast is on. None on the month's last day (nothing left to forecast)
+    or when AWS returns nothing a float can be made of."""
+    tomorrow, end = _day(now + 86400), month_end_str(now)
+    if tomorrow >= end:
+        return None
+    out = ask(["ce", "get-cost-forecast", "--time-period", "Start=%s,End=%s" % (tomorrow, end),
+               "--metric", "UNBLENDED_COST", "--granularity", "MONTHLY"])
+    total = out.get("Total") if isinstance(out, dict) else None
+    try:
+        return round(float((total or {}).get("Amount")), 2)
+    except (TypeError, ValueError):
+        return None
 
 
 @source("aws_cost", ttl=3600, timeout=40, scope="global", fallback=FALLBACK, binaries=("aws",),
@@ -200,11 +282,21 @@ def aws_cost(ctx):
         return {"status": "unknown", "error": "no usable AWS credentials: %s%s" % (why, " (%s)" % fix if fix else "")}
     if not mark(now):
         return {"status": "unknown", "error": "cannot note the attempt in the state directory: Cost Explorer not asked"}
+    ask = lambda args: aws.cli(ctx, args, prof, "us-east-1", timeout=25, env=ONE_ATTEMPT, read_timeout=20)  # noqa: E731
+    detail = str(acfg.get("cost_detail") or "usage_type").strip().lower()
     try:
-        data = query(lambda args: aws.cli(ctx, args, prof, "us-east-1", timeout=25, env=ONE_ATTEMPT, read_timeout=20), now)
+        data = query(ask, now, detail=detail)
     except Exception as e:  # noqa: BLE001 — billed or not, any failure waits out the full gap
         why = str(e) if isinstance(e, ProbeError) else "%s: %s" % (type(e).__name__, e)
         prev.update(tried_at=now, ce_error=_scrub(aws.masked(why), 160))  # an access-denied quotes the caller's ARN
         return prev
     data.update(tried_at=now, as_of=now, profile=aws.masked(prof or "default"))
+    if acfg.get("cost_forecast"):  # a second, genuinely extra request the same day
+        try:
+            fc = forecast_query(ask, now)
+            if fc is not None:
+                data["ce_forecast"] = round(data["mtd"] + fc, 2)
+        except Exception as e:  # noqa: BLE001 — the base reading above is already fetched; never lose it here
+            why = str(e) if isinstance(e, ProbeError) else "%s: %s" % (type(e).__name__, e)
+            data["forecast_error"] = _scrub(aws.masked(why), 160)
     return data

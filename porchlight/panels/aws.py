@@ -80,8 +80,9 @@ def per_day(a, c) -> float:
 def month_view(x):
     """{"mtd", "month", "budget", "forecast", "end"} or None. MTD is the account budget's
     spend when there is one (AWS refreshes it a few times a day; aws_account reads it
-    hourly), else Cost Explorer's for this month. Forecast: MTD plus per_day() carried to
-    the end of the month."""
+    hourly), else Cost Explorer's for this month. Forecast: Cost Explorer's own
+    GetCostForecast (c["ce_forecast"], when cost_forecast = true asked it), else MTD
+    plus per_day() carried to the end of the month."""
     from ..sources.aws import account_budget
     a, c = account(x), cost(x)
     b = account_budget(_l(a.get("budgets")))
@@ -93,8 +94,10 @@ def month_view(x):
     else:
         return None
     end = _month_end(now)
+    ce_fc = _n(c.get("ce_forecast"), None)
+    forecast = ce_fc if ce_fc is not None else mtd + per_day(a, c) * max(0.0, end - now) / 86400
     return {"mtd": mtd, "month": time.strftime("%b", time.gmtime(now)), "budget": b,
-            "forecast": mtd + per_day(a, c) * max(0.0, end - now) / 86400, "end": time.strftime("%b %d", time.gmtime(end - 1))}
+            "forecast": forecast, "end": time.strftime("%b %d", time.gmtime(end - 1))}
 
 
 def budget_text(b, mtd) -> str:
@@ -188,6 +191,33 @@ def _services(c, room) -> str:
         return ""
     items = ["%s %s" % (n, core.money(v)) for n, v in svc]
     return fitted(items, room, more=lambda k: T.dim("+%d %s" % (k, core.money(sum(v for _, v in svc[len(svc) - k:])))))
+
+
+_USAGE_LABEL = {"ebs": "ebs", "snapshot": "snap", "nat_gateway": "nat", "public_ipv4": "ip", "data_transfer": "xfer",
+               "other": "other"}
+
+
+def _usage_types(c, room) -> str:
+    """EC2 / EC2-Other broken down by usage type (free second --group-by dimension),
+    the "other" bucket (mostly instance-hours, already in `services`) dropped unless
+    it is all there is."""
+    ut = c.get("usage_types") if isinstance(c.get("usage_types"), dict) else None
+    if not ut:
+        return ""
+    rows = [(k, v) for k, v in ut.items() if isinstance(v, (int, float)) and not isinstance(v, bool) and round(v, 2)]
+    shown = [(k, v) for k, v in rows if k != "other"] or rows
+    shown.sort(key=lambda kv: -kv[1])
+    items = ["%s %s" % (_USAGE_LABEL.get(k, k), core.money(v)) for k, v in shown]
+    return fitted(items, room, more=lambda k: T.dim("+%d" % k))
+
+
+def _group(c, room) -> str:
+    """The free region/linked-account breakdown (cost_detail = "region" | "linked_account")."""
+    g = _pairs(c.get("group"))
+    if not g:
+        return ""
+    items = ["%s %s" % (n, core.money(v)) for n, v in g]
+    return fitted(items, room, more=lambda k: T.dim("+%d %s" % (k, core.money(sum(v for _, v in g[len(g) - k:])))))
 
 
 def _running(insts, home, room) -> list:
@@ -307,6 +337,12 @@ def p_aws(x):
     svc = _services(c, room)
     if svc:
         rows.append(kv("services", svc, W))
+    usage = _usage_types(c, room)
+    if usage:
+        rows.append(kv("usage", usage, W))
+    grp = _group(c, room)
+    if grp:
+        rows.append(kv("account" if c.get("detail") == "linked_account" else "region", grp, W))
     regions = _d(a.get("regions"))
     home = set(_names(regions.get("home")))
     insts = _l(a.get("instances"))

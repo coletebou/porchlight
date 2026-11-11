@@ -86,9 +86,11 @@ class FakeAWS:
     returns stderr text to fail with, or None. Every call is recorded."""
 
     def __init__(self, regions=None, enabled=("us-east-1", "us-east-2"), budgets=(), sts_ok=("readonly",), spot="0.0712",
-                 ce=None, fail=None, sts_err=NO_CREDS, delay=0.0, version="aws-cli/2.38.6 Python/3.15.2 Linux/6.8.0 exe/x86_64"):
+                 ce=None, forecast=None, fail=None, sts_err=NO_CREDS, delay=0.0,
+                 version="aws-cli/2.38.6 Python/3.15.2 Linux/6.8.0 exe/x86_64"):
         self.regions, self.enabled, self.budgets, self.version = regions or {}, list(enabled), list(budgets), version
         self.sts_ok, self.spot, self.ce, self.fail, self.sts_err, self.delay = sts_ok, spot, ce, fail, sts_err, delay
+        self.forecast = forecast if forecast is not None else {"Total": {"Amount": "12.34", "Unit": "USD"}}
         self.calls, self.lock, self.active, self.peak = [], threading.Lock(), 0, 0
 
     def count(self, svc, cmd=None):
@@ -144,6 +146,8 @@ class FakeAWS:
             return 0, json.dumps({"PriceList": [product(got)] if got else []}), ""
         if (svc, cmd) == ("ce", "get-cost-and-usage"):
             return 0, json.dumps(self.ce), ""
+        if (svc, cmd) == ("ce", "get-cost-forecast"):
+            return 0, json.dumps(self.forecast), ""
         raise AssertionError("unexpected aws call: %r" % (args,))
 
 
@@ -534,8 +538,10 @@ class ReadOnly(unittest.TestCase):
         self.assertEqual(src.count("ctx.run("), 1)  # inside cli(), the one way out
         self.assertEqual(re.findall(r'\bcli\(ctx, \["(-[\w-]+)"', src), ["--version"])  # the one call that is no API call
         cost = self.read("aws_cost.py")
-        self.assertEqual(re.findall(r'\["(ce)", "([\w-]+)"', cost), [("ce", "get-cost-and-usage")])
-        self.assertEqual(re.findall(r"\bcli\(", cost), ["cli("])  # the one query, through aws.cli
+        # get-cost-forecast is new, deliberate and opt-in (cost_forecast = true): a second
+        # billed read, never a mutation. Both go through the same one call site below.
+        self.assertEqual(re.findall(r'\["(ce)", "([\w-]+)"', cost), [("ce", "get-cost-and-usage"), ("ce", "get-cost-forecast")])
+        self.assertEqual(re.findall(r"\bcli\(", cost), ["cli("])  # one call site; `ask` just gets called twice
         self.assertIn('"--no-paginate"', cost)  # a second page would be a second billed request
         for name in ("aws.py", "aws_prices.py", "aws_cost.py"):
             text = self.read(name)
@@ -658,6 +664,61 @@ class CostExplorer(Base):
         self.assertEqual(aws_cost.short("Amazon Elastic Container Service for Kubernetes"), "EKS")
         self.assertEqual(aws_cost.short("Amazon Some Very Long Service Name Here"), "Some Very Long")  # whole words
 
+    def test_usage_type_is_classified(self):
+        self.assertEqual(aws_cost.usage_bucket("USE1-EBS:VolumeUsage.gp3"), "ebs")
+        self.assertEqual(aws_cost.usage_bucket("USE1-EBS:SnapshotUsage"), "snapshot")
+        self.assertEqual(aws_cost.usage_bucket("USE1-NatGateway-Bytes"), "nat_gateway")
+        self.assertEqual(aws_cost.usage_bucket("USE1-PublicIPv4:IdleAddress"), "public_ipv4")
+        self.assertEqual(aws_cost.usage_bucket("EUC1-ElasticIP:IdleAddress"), "public_ipv4")
+        self.assertEqual(aws_cost.usage_bucket("USE1-DataTransfer-Out-Bytes"), "data_transfer")
+        self.assertEqual(aws_cost.usage_bucket("USE1-AWS-Out-Bytes"), "data_transfer")
+        self.assertEqual(aws_cost.usage_bucket("USE1-BoxUsage:m7i.large"), "other")
+        self.assertEqual(aws_cost.usage_bucket(""), "other")
+
+    def test_the_second_group_by_dimension_is_free_and_defaults_to_usage_type(self):
+        """The default query carries USAGE_TYPE as a second --group-by: still one request,
+        and it breaks EC2 / EC2-Other down into the buckets the run-rate cannot see inside."""
+        def day2(d, rows):
+            return {"TimePeriod": {"Start": d, "End": d}, "Estimated": True, "Total": {}, "Groups": [
+                {"Keys": [svc, ut], "Metrics": {"UnblendedCost": {"Amount": str(v), "Unit": "USD"}}} for svc, ut, v in rows]}
+        days = [day2("2026-11-01", [(EC2, "USE1-BoxUsage:m7i.large", 30.0), ("EC2 - Other", "USE1-EBS:VolumeUsage.gp3", 2.0),
+                                     ("EC2 - Other", "USE1-NatGateway-Bytes", 0.5), ("Amazon Simple Storage Service", "USE1-TimedStorage", 1.0)])]
+        asked = []
+        out = aws_cost.query(lambda a: (asked.append(a), {"GroupDefinitions": [], "ResultsByTime": days})[1], utc(2026, 11, 1, 13))
+        self.assertEqual(len(asked), 1)
+        self.assertEqual(asked[0][asked[0].index("--group-by") + 1:asked[0].index("--group-by") + 3],
+                         ["Type=DIMENSION,Key=SERVICE", "Type=DIMENSION,Key=USAGE_TYPE"])
+        self.assertEqual(out["detail"], "usage_type")
+        self.assertEqual(out["usage_types"], {"ebs": 2.0, "nat_gateway": 0.5, "other": 30.0})
+        self.assertNotIn("group", out)
+
+    def test_cost_detail_can_group_by_region_or_account_instead(self):
+        def day2(d, rows):
+            return {"TimePeriod": {"Start": d, "End": d}, "Estimated": True, "Total": {}, "Groups": [
+                {"Keys": [svc, dim], "Metrics": {"UnblendedCost": {"Amount": str(v), "Unit": "USD"}}} for svc, dim, v in rows]}
+        days = [day2("2026-11-01", [(EC2, "us-east-1", 30.0), (EC2, "eu-west-1", 5.0), ("EC2 - Other", "us-east-1", 2.0)])]
+        out = aws_cost.query(lambda a: {"GroupDefinitions": [], "ResultsByTime": days}, utc(2026, 11, 1, 13), detail="region")
+        self.assertEqual(out["detail"], "region")
+        self.assertEqual(out["group"], [["us-east-1", 32.0], ["eu-west-1", 5.0]])
+        self.assertNotIn("usage_types", out)
+        asked = []
+        out = aws_cost.query(lambda a: (asked.append(a), {"GroupDefinitions": [], "ResultsByTime": days})[1],
+                             utc(2026, 11, 1, 13), detail="none")
+        self.assertEqual(out["detail"], "none")
+        self.assertNotIn("usage_types", out)
+        self.assertNotIn("group", out)
+        self.assertNotIn("--group-by Type=DIMENSION,Key=SERVICE Type=DIMENSION,Key=USAGE_TYPE", " ".join(asked[0]))
+        self.assertEqual(asked[0][asked[0].index("--group-by") + 1:asked[0].index("--group-by") + 2], ["Type=DIMENSION,Key=SERVICE"])
+
+    def test_cost_forecast_adds_to_the_month_to_date(self):
+        self.assertEqual(aws_cost.forecast_query(lambda a: {"Total": {"Amount": "88.40", "Unit": "USD"}}, utc(2026, 11, 3, 13)),
+                         88.40)
+        self.assertIsNone(aws_cost.forecast_query(lambda a: {"Total": {}}, utc(2026, 11, 3, 13)))
+        self.assertIsNone(aws_cost.forecast_query(lambda a: (_ for _ in ()).throw(AssertionError("must not ask")),
+                                                   utc(2026, 11, 30, 23)))  # the month's last day: nothing left to forecast
+        self.assertEqual(aws_cost.month_end_str(utc(2026, 11, 3, 13)), "2026-12-01")
+        self.assertEqual(aws_cost.month_end_str(utc(2026, 12, 15, 0)), "2027-01-01")
+
     def test_one_billed_request_a_day_even_when_forced(self):
         f = self.fake(ce=ce_reply())
         d1 = self.run_cost()
@@ -670,6 +731,26 @@ class CostExplorer(Base):
         self.assertEqual(f.calls, [])  # not even STS
         self.run_cost(prev=d1, now=utc(2026, 10, 28, 12, 30))
         self.assertEqual(f.count("ce"), 1)
+
+    def test_cost_forecast_is_opt_in_and_rides_the_same_days_attempt(self):
+        f = self.fake(ce=ce_reply(), forecast={"Total": {"Amount": "40.00", "Unit": "USD"}})
+        d1 = self.run_cost(toml=CE_ON)  # off by default: one request, no forecast field
+        self.assertEqual((f.count("ce", "get-cost-forecast"), "ce_forecast" in d1), (0, False))
+        f.calls[:] = []
+        d2 = self.run_cost(toml=CE_ON + "cost_forecast = true\n", now=utc(2026, 10, 28, 12, 30))
+        self.assertEqual(f.count("ce", "get-cost-forecast"), 1)
+        self.assertEqual(f.count("ce", "get-cost-and-usage"), 1)  # both the same day's one attempt
+        self.assertEqual(d2["ce_forecast"], round(d2["mtd"] + 40.00, 2))
+        f.calls[:] = []  # a failed forecast never costs the (already billed) base reading
+        real = f.answer
+
+        def fail_forecast(svc, cmd, prof, region, args):
+            if (svc, cmd) == ("ce", "get-cost-forecast"):
+                return 254, "", "An error occurred (ThrottlingException)"
+            return real(svc, cmd, prof, region, args)
+        f.answer = fail_forecast
+        d3 = self.run_cost(toml=CE_ON + "cost_forecast = true\n", now=utc(2026, 10, 29, 12, 30))
+        self.assertEqual((d3["mtd"], "ce_forecast" in d3, "ThrottlingException" in d3["forecast_error"]), (45.59, False, True))
 
     def test_forced_collector_runs_make_no_second_request(self):
         """The real path: `porchlight collect --force` (and `collect aws_cost`) run the source
@@ -797,7 +878,9 @@ class Panel(unittest.TestCase):
         return [T.strip(ln) for ln in p.lines] if p else None
 
     def test_the_month_prefers_the_budget_and_carries_the_burn_to_the_month_end(self):
-        self.load()
+        d = demo()
+        del d["aws_cost"]["ce_forecast"]  # the heuristic below, not Cost Explorer's own forecast
+        self.load(d)
         x = RCtx(host(AUTO), registry.Cache(), {"vitals": {}}, [], 58)
         mv = paws.month_view(x)
         left = paws._month_end(time.time()) - time.time()
@@ -815,6 +898,27 @@ class Panel(unittest.TestCase):
         d["aws_cost"]["month"] = "1999-01"  # last month's bill is not this month's
         self.load(d)
         self.assertIsNone(paws.month_view(RCtx(host(AUTO), registry.Cache(), {"vitals": {}}, [], 58)))
+
+    def test_cost_explorers_own_forecast_wins_over_the_heuristic_when_present(self):
+        self.load()  # the demo turns cost_forecast on: ce_forecast is in the record
+        mv = paws.month_view(RCtx(host(AUTO), registry.Cache(), {"vitals": {}}, [], 58))
+        self.assertEqual(mv["forecast"], 329.84)
+
+    def test_the_usage_type_and_group_rows(self):
+        self.load()
+        rows = self.text()
+        usage = next(ln for ln in rows if ln.startswith("usage"))
+        self.assertIn("ebs $34.10", usage)
+        self.assertNotIn("other", usage)  # the catch-all bucket is dropped when there is something else to show
+        d = demo()
+        d["aws_cost"]["detail"] = "region"
+        d["aws_cost"]["group"] = [["us-east-1", 220.5], ["eu-west-1", 43.2]]
+        del d["aws_cost"]["usage_types"]
+        self.load(d)
+        rows = self.text()
+        region = next(ln for ln in rows if ln.startswith("region"))
+        self.assertIn("us-east-1 $220", region)
+        self.assertFalse(any(ln.startswith("usage") for ln in rows))
 
     def test_rows_name_the_money(self):
         self.load()
@@ -994,7 +1098,7 @@ class DemoData(Base):
         self.fake(regions=regions, budgets=[BUDGET, SCOPED], ce=ce_reply())
         live = {"aws_account": self.run_account(TOML), "aws_cost": None}
         with mock.patch.object(saas, "_now", lambda: NOW):
-            live["aws_cost"] = aws_cost.aws_cost(self.ctx("aws_cost", CE_ON))
+            live["aws_cost"] = aws_cost.aws_cost(self.ctx("aws_cost", CE_ON + "cost_forecast = true\n"))
         d = demo()
         a, la = d["aws_account"]["details"], live["aws_account"]["details"]
         self.assertEqual(set(d["aws_account"]) - set(live["aws_account"]), set())
