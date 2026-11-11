@@ -230,7 +230,10 @@ one is billing) so either runs without the other.
 needs the `user` scope (your own account) or `admin:org` (an org you own); a
 fine-grained token needs the account's "Plan: read" permission. A token that
 can reach GitHub but lacks that scope is reported as needing it — a state,
-never an error alert.
+never an error alert. GitHub answers such a token with a 403, or, for a classic
+token, a 404 on both billing endpoints; the classic case is recognised from the
+`X-OAuth-Scopes` header GitHub returns, so a fine-grained token's 404 (no such
+header) still shows as a plain fetch failure.
 
 ```toml
 [sources.gh_actions_cost]
