@@ -21,7 +21,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # ubuntu-latest moved to 26.04, which actions/setup-python has no Python 3.9 build for;
+        # 24.04 keeps the oldest supported Python tested on Linux.
+        os: [ubuntu-24.04, macos-latest]
         python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
