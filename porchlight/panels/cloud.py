@@ -92,6 +92,10 @@ def _rows(label, lines, w) -> list:
     return [kv(label if i == 0 else "", ln, w) for i, ln in enumerate(lines)]
 
 
+_HZ_KIND = {"servers": "servers", "volumes": "vol", "storage_boxes": "boxes", "primary_ips": "ip",
+           "floating_ips": "fip", "snapshots": "snap", "load_balancers": "lb", "traffic_overage": "overage"}
+
+
 def _sites(si) -> list:
     """The `sites` rows, normalized for endpoint_cells (which reads them unguarded)."""
     return [dict(r, label=str(r["label"]), ms=_n(r.get("ms")), info=str(r["info"]) if r.get("info") else None)
@@ -213,7 +217,12 @@ def p_infra(x):
             rows.append(kv("box", T.dot(l2) + " " + T.pad(T.fit(str(b.get("name")), 12), 12) + " " + T.bar(p, bw, 80, 90) +
                            " " + T.sev("%3d%%" % round(p), l2) +
                            T.dim(" %.2f/%.1f TiB" % (_n(b.get("used_tib")), _n(b.get("quota_tib")))), W))
-        if not items and not boxes:
+        lbs = _l(det.get("load_balancers"))
+        if lbs:
+            lb_items = [str(lb.get("name")) + T.dim(" %.0f%% out" % lb["traffic_out_pct"] if _n(lb.get("traffic_out_pct"), None)
+                                                     is not None else "") for lb in lbs]
+            rows += _rows("lb", cells(lb_items, x.cw - 1 - W, 16), W)
+        if not items and not boxes and not lbs:
             rows.append(kv("hetzner", _quiet(hz), W))
     gh = _rec(x, "github")
     if gh:
@@ -397,10 +406,36 @@ def p_money(x):
             p = _d(det.get(n))
             if p.get("status") == "unknown" and p.get("error"):
                 rows.append(kv(n if len(n) < W else n[:W - 1], T.dot("unknown") + " " + T.dim(str(p["error"])[:60]), W))
-    est = _n(_det(_rec(x, "hetzner")).get("est_monthly"), None)
+    hz_det = _det(_rec(x, "hetzner"))
+    est = _n(hz_det.get("est_monthly"), None)
     if est is not None:
         used.append("hetzner")
-        rows.append(kv("hetzner", "~%s/mo" % _money(est, _det(_rec(x, "hetzner")).get("currency")) + T.dim(" price-list run-rate"), W))
+        head = "~%s/mo" % _money(est, hz_det.get("currency")) + T.dim(" price-list run-rate")
+        by_kind = sorted(((_HZ_KIND.get(k, k), v) for k, v in _d(hz_det.get("est_by_kind")).items() if _n(v, None)),
+                         key=lambda kv_: -kv_[1])
+        if by_kind:
+            parts = ["%s %s" % (n, _money(v, hz_det.get("currency"))) for n, v in by_kind]
+            head += ": " + fitted(parts, max(0, x.cw - 1 - W - T.width(head) - 2))
+        rows.append(kv("hetzner", head, W))
+    ga = _rec(x, "gh_actions_cost")
+    if ga:
+        used.append("gh_actions_cost")
+        det = _det(ga)
+        if "net_usd" in det:
+            l2 = _st(ga)
+            lvl = _up(lvl, l2)
+            bits = [T.sev(_money(_n(det.get("net_usd"))) + " net", l2), T.dim("gross " + _money(_n(det.get("gross_usd"))))]
+            if _n(det.get("discount_pct"), None) is not None:
+                bits.append(T.dim("%.0f%% covered" % det["discount_pct"]))
+            top = _l(det.get("top_repos"))
+            if top:
+                bits.append(T.dim("top " + str(top[0].get("repo")) + " " + _money(_n(top[0].get("net")))))
+            rows.append(kv("gh actions", T.dot(l2) + " " + SEP.join(bits), W))
+        elif _n(det.get("legacy_minutes_used"), None) is not None:
+            used_, inc = _n(det.get("legacy_minutes_used")), _n(det.get("legacy_included_minutes"), None)
+            rows.append(kv("gh actions", T.dot(_st(ga)) + " %d%s min used" % (used_, "/%d" % inc if inc else ""), W))
+        else:
+            rows.append(kv("gh actions", _quiet(ga), W))
     mv = aws_panel.month_view(x)
     if mv:  # the account budget's spend, else Cost Explorer's; the AWS panel has the rest
         used.append("aws_account")

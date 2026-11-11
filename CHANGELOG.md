@@ -59,6 +59,29 @@ All notable changes to this project are documented here. The format follows
   add a request; the CLI's own retries and pagination are off, and in a fleet
   only the hub asks. Account ids in stored profile names and AWS errors keep
   only their last four digits.
+- `aws_cost`'s one daily request now carries a second, free `--group-by`
+  dimension (`cost_detail`, default `"usage_type"`): the AWS panel's new
+  `usage` row splits the opaque "EC2 - Other" and EC2 compute buckets into
+  EBS, snapshots, NAT gateways, public IPv4/idle EIPs and data transfer.
+  `cost_detail = "region"` or `"linked_account"` swaps that for a top list by
+  region or account instead — still one request either way. `cost_forecast =
+  true` adds a second, genuinely extra request the same day: Cost Explorer's
+  own `GetCostForecast`, which the month line then shows in place of the
+  cheaper per-bucket heuristic.
+- A `gh_actions_cost` source and a MONEY row: month-to-date GitHub Actions
+  spend (gross vs net, minutes by SKU, non-minute usage by SKU, top
+  repositories by cost) from the enhanced billing usage API, for the token's
+  own account and any configured orgs. Falls back to the legacy minutes-only
+  billing endpoint where the enhanced platform isn't on; a token that can
+  reach GitHub but lacks billing-read scope is shown as needing it, never as
+  an error. Alerts only on a configured budget or any net spend at all.
+- Hetzner's `hetzner` source now prices every resource it can see — primary
+  IPv4/IPv6 addresses, Floating IPs, snapshots and load balancers, alongside
+  the existing servers, volumes and Storage Boxes — into a per-resource
+  monthly cost table (`est_by_kind`), with a list-price estimate of traffic
+  overage past the included allowance. `price_basis` picks gross (default,
+  VAT included) or net. Any one resource type the token cannot reach only
+  drops its own line from the estimate, the same as an unpriced item.
 - Panel helpers for plugins: `fitted()` (as many items as fit, then "+N"),
   `wrap()` (words onto lines, a word cut only when it alone outgrows its line),
   `theme.spark()`, and

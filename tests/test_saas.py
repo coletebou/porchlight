@@ -591,10 +591,13 @@ class UptimeRobot(Base):
 HC, HZ = saas.HCLOUD, saas.HETZNER
 
 
-def hz_server(name, status="running", out_gb=100, backups=False):
+def hz_server(name, status="running", out_gb=100, backups=False, price_per_tb=None):
+    p = {"location": "ash", "price_monthly": {"gross": "141.4900000000000000"}}
+    if price_per_tb is not None:
+        p["price_per_tb_traffic"] = {"gross": str(price_per_tb)}
     return {"name": name, "status": status, "location": {"name": "ash"}, "included_traffic": 4398046511104,
             "outgoing_traffic": out_gb * 10 ** 9, "backup_window": "22-02" if backups else None, "root_password": CANARY,
-            "server_type": {"name": "cpx41", "prices": [{"location": "ash", "price_monthly": {"gross": "141.4900000000000000"}}]}}
+            "server_type": {"name": "cpx41", "prices": [p]}}
 
 
 def hz_box(used, quota=5497558138880, status="active", name="box"):
@@ -602,15 +605,43 @@ def hz_box(used, quota=5497558138880, status="active", name="box"):
             "storage_box_type": {"size": quota, "prices": [{"location": "fsn1", "price_monthly": {"gross": "13.0000"}}]}}
 
 
-def hz_routes(servers=None, boxes=None, currency=None):
+def hz_primary_ip(name, ip="203.0.113.10", ty="ipv4", loc="ash", assigned=True):
+    return {"name": name, "ip": ip, "type": ty, "location": {"name": loc}, "assignee_id": 1 if assigned else None}
+
+
+def hz_floating_ip(name, ip="203.0.113.20", ty="ipv4", loc="ash", assigned=True):
+    return {"name": name, "ip": ip, "type": ty, "home_location": {"name": loc}, "server": 1 if assigned else None}
+
+
+def hz_snapshot(name, gb=20.0, snap_id=1):
+    return {"id": snap_id, "name": name, "type": "snapshot", "image_size": gb, "disk_size": gb}
+
+
+def hz_load_balancer(name, loc="ash", ty="lb11", inc_tb=20.0, out_tb=5.0):
+    return {"name": name, "location": {"name": loc}, "load_balancer_type": {"name": ty},
+            "included_traffic": int(inc_tb * saas.TIB), "outgoing_traffic": int(out_tb * saas.TIB)}
+
+
+def hz_routes(servers=None, boxes=None, currency=None, primary_ips=None, floating_ips=None, snapshots=None, load_balancers=None):
     servers = servers if servers is not None else [hz_server("a"), hz_server("b")]
-    pricing = {"pricing": {"volume": {"price_per_gb_month": {"gross": "0.0767"}}}}
+    pricing = {"pricing": {
+        "volume": {"price_per_gb_month": {"gross": "0.0767"}},
+        "image": {"price_per_gb_month": {"gross": "0.0119"}},
+        "primary_ips": [{"type": "ipv4", "prices": [{"location": "ash", "price_monthly": {"gross": "0.5000"}}]},
+                       {"type": "ipv6", "prices": [{"location": "ash", "price_monthly": {"gross": "0.0000"}}]}],
+        "floating_ips": [{"type": "ipv4", "prices": [{"location": "ash", "price_monthly": {"gross": "1.0000"}}]}],
+        "load_balancer_types": [{"name": "lb11", "prices": [{"location": "ash", "price_monthly": {"gross": "5.3900"},
+                                 "price_per_tb_traffic": {"gross": "1.0000"}}]}]}}
     if currency:
         pricing["pricing"]["currency"] = currency
     return {("GET", HC + "/servers"): (200, {"servers": servers}),
             ("GET", HC + "/volumes"): (200, {"volumes": [{"size": 400}, {"size": 400}]}),
             ("GET", HC + "/pricing"): (200, pricing),
-            ("GET", HZ + "/storage_boxes"): (200, {"storage_boxes": boxes if boxes is not None else [hz_box(1649267441664)]})}
+            ("GET", HZ + "/storage_boxes"): (200, {"storage_boxes": boxes if boxes is not None else [hz_box(1649267441664)]}),
+            ("GET", HC + "/primary_ips"): (200, {"primary_ips": primary_ips if primary_ips is not None else []}),
+            ("GET", HC + "/floating_ips"): (200, {"floating_ips": floating_ips if floating_ips is not None else []}),
+            ("GET", HC + "/images"): (200, {"images": snapshots if snapshots is not None else []}),
+            ("GET", HC + "/load_balancers"): (200, {"load_balancers": load_balancers if load_balancers is not None else []})}
 
 
 class Hetzner(Base):
@@ -651,6 +682,71 @@ class Hetzner(Base):
         res, _ = self.run_src("hetzner", self.ENV, hz_routes(currency="EUR"))
         self.assertEqual((res["details"]["est_monthly"], res["details"]["currency"]), (357.34, "EUR"))
         self.assertTrue(res["summary"].endswith("~357 EUR/mo"))
+
+    def test_the_per_resource_cost_table(self):
+        res, _ = self.run_src("hetzner", self.ENV, hz_routes(
+            primary_ips=[hz_primary_ip("api-1-ip"), hz_primary_ip("api-1-v6", ty="ipv6")],
+            floating_ips=[hz_floating_ip("legacy-fip")],
+            snapshots=[hz_snapshot("api-1-backup", gb=40.0)],
+            load_balancers=[hz_load_balancer("lb-1")]))
+        d = res["details"]
+        self.assertEqual(d["primary_ips"], [{"name": "api-1-ip", "ip_type": "ipv4", "location": "ash", "assigned": True,
+                                             "usd_mo": 0.5},
+                                            {"name": "api-1-v6", "ip_type": "ipv6", "location": "ash", "assigned": True,
+                                             "usd_mo": 0.0}])
+        self.assertEqual(d["floating_ips"], [{"name": "legacy-fip", "ip_type": "ipv4", "location": "ash", "assigned": True,
+                                              "usd_mo": 1.0}])
+        self.assertEqual(d["snapshots"], [{"name": "api-1-backup", "gb": 40.0, "usd_mo": round(40.0 * 0.0119, 2)}])
+        self.assertEqual(d["load_balancers"], [{"name": "lb-1", "type": "lb11", "location": "ash", "traffic_out_pct": 25.0,
+                                                "usd_mo": 5.39, "overage_usd_mo": None}])
+        by_kind = d["est_by_kind"]
+        self.assertEqual(by_kind["primary_ips"], 0.5)
+        self.assertEqual(by_kind["floating_ips"], 1.0)
+        self.assertEqual(by_kind["snapshots"], round(40.0 * 0.0119, 2))
+        self.assertEqual(by_kind["load_balancers"], 5.39)
+        self.assertNotIn("traffic_overage", by_kind)  # no server or LB went over this run
+        self.assertAlmostEqual(d["est_monthly"], sum(by_kind.values()), places=2)
+
+    def test_traffic_overage_is_estimated_from_the_per_tb_rate(self):
+        # included_traffic is 4 TiB; 4500 decimal GB of outgoing traffic clears it.
+        res, _ = self.run_src("hetzner", self.ENV,
+                              hz_routes(servers=[hz_server("a", out_gb=4500, price_per_tb=2.5)]))
+        over = res["details"]["servers"][0]["overage_usd_mo"]
+        self.assertIsNotNone(over)
+        extra_tib = (4500 * 10 ** 9 - 4398046511104) / saas.TIB
+        self.assertAlmostEqual(over, extra_tib * 2.5, places=2)
+        self.assertAlmostEqual(res["details"]["est_by_kind"]["traffic_overage"], over, places=2)
+        res2, _ = self.run_src("hetzner", self.ENV,
+                               hz_routes(load_balancers=[hz_load_balancer("lb-1", inc_tb=20.0, out_tb=25.0)]))
+        over2 = res2["details"]["load_balancers"][0]["overage_usd_mo"]
+        self.assertAlmostEqual(over2, 5.0 * 1.0, places=2)  # 5 TiB over the included 20, at $1.00/TiB
+
+    def test_price_basis_net_sums_the_net_price(self):
+        res, _ = self.run_src("hetzner", self.ENV, hz_routes(primary_ips=[hz_primary_ip("api-1-ip")]),
+                              '[sources.hetzner]\nprice_basis = "net"\n')
+        self.assertEqual(res["details"]["price_basis"], "net")
+        # hz_routes() only ever sets "gross" prices; "net" with no net field present is unpriced, never guessed.
+        self.assertIsNone(res["details"]["primary_ips"][0]["usd_mo"])
+
+    def test_ignore_matches_ips_snapshots_and_load_balancers_too(self):
+        res, _ = self.run_src("hetzner", self.ENV, hz_routes(
+            primary_ips=[hz_primary_ip("api-1-ip"), hz_primary_ip("scratch-ip")],
+            floating_ips=[hz_floating_ip("scratch-fip")], snapshots=[hz_snapshot("scratch-snap")],
+            load_balancers=[hz_load_balancer("scratch-lb")]), '[sources.hetzner]\nignore = ["scratch"]')
+        d = res["details"]
+        self.assertEqual([r["name"] for r in d["primary_ips"]], ["api-1-ip"])
+        self.assertEqual((d.get("floating_ips"), d.get("snapshots"), d.get("load_balancers")), ([], [], []))
+
+    def test_an_unreachable_extra_resource_type_only_drops_its_own_estimate(self):
+        """IPs, snapshots and load balancers are extras, like the price list: a token
+        that cannot reach one of them must not turn the whole reading into a warning."""
+        r = hz_routes()
+        r[("GET", HC + "/primary_ips")] = (403, {"message": "forbidden"})
+        res, _ = self.run_src("hetzner", self.ENV, r)
+        self.assertEqual(res["status"], "ok")
+        self.assertIn("primary_ips", res["details"]["partial_errors"])
+        self.assertNotIn("primary_ips", res["details"].get("est_by_kind", {}))
+        self.assertEqual(res["details"]["est_monthly"], 357.34)  # unaffected: servers, volumes, boxes still price fine
 
     def test_partial_data_and_total_failure(self):
         r = hz_routes()
@@ -1411,7 +1507,7 @@ class Panels(unittest.TestCase):
                        "12 SMS today"):
             self.assertIn(needle, comms)
         for needle in ("$1.3k available", "42 active", "MRR $1.6k", "anthropic $38.20", "openai $12.75", "= $50.95", "$7.40 left",
-                       "BillingRead", "~$61.37/mo", "$81.49 on-demand this cycle", "$63.80 balance"):
+                       "BillingRead", "~$66.52/mo", "servers $45.65", "$81.49 on-demand this cycle", "$63.80 balance"):
             self.assertIn(needle, money)
         self.assertEqual([self.build(k).level for k in PANELS], ["crit", "warn", "warn", "warn"])  # docs is down: crit
 
@@ -1487,7 +1583,9 @@ class Demo(Base):
                 "cloudflare": self.run_src("cloudflare", CF_KEY_ENV, cf_routes())[0],
                 "vercel": self.run_src("vercel", {"VERCEL_TOKEN": CANARY}, {("GET", VP): (200, {"projects": [vproj("a", "READY", hours=1)]})})[0],
                 "uptimerobot": self.run_src("uptimerobot", UptimeRobot.ENV, {("GET", V3): (200, {"data": [m3("a", "UP")]})})[0],
-                "hetzner": self.run_src("hetzner", Hetzner.ENV, hz_routes())[0],
+                "hetzner": self.run_src("hetzner", Hetzner.ENV, hz_routes(
+                    primary_ips=[hz_primary_ip("a")], floating_ips=[hz_floating_ip("b")],
+                    snapshots=[hz_snapshot("c")], load_balancers=[hz_load_balancer("d")]))[0],
                 "github": self.run_src("github", {"GH_TOKEN": "gho_good"}, GitHub.routes(self, [gh_run("x", "success", hours=1)]), GH_TOML)[0],
                 "sentry": self.run_src("sentry", Sentry.ENV, Sentry.routes(self, [{"project": "api", "count_unique(issue)": 1, "count()": 3}]))[0],
                 "stripe": self.run_src("stripe", Stripe.ENV, Stripe.routes(self, [sub("active")]))[0],
@@ -1503,8 +1601,9 @@ class Demo(Base):
         self.assertEqual(set(d), set(SOURCES))
         nested = {"cloudflare": ("tunnels", "traffic_24h", "zones", "email_routing"), "stripe": ("subscriptions",),
                   "resend": ("emails_24h",), "twilio": ("balance",), "ai_spend": ("openrouter", "anthropic", "openai", "xai")}
-        rows = {"cloudflare": ("traffic_zones",), "hetzner": ("servers", "storage_boxes"), "github": ("repos",), "langfuse": ("projects",),
-                "resend": ("domains",)}
+        rows = {"cloudflare": ("traffic_zones",),
+                "hetzner": ("servers", "storage_boxes", "primary_ips", "floating_ips", "snapshots", "load_balancers"),
+                "github": ("repos",), "langfuse": ("projects",), "resend": ("domains",)}
         for name in SOURCES:
             rec, real = d[name], live[name]
             assert_shape(self, rec)

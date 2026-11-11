@@ -51,18 +51,39 @@
   },
   "hetzner": {
     "status": "ok",
-    "summary": "3/3 servers up, box 62%, ~$61/mo",
+    "summary": "3/3 servers up, box 62%, ~$67/mo",
     "details": {
-      "cost_mtd": "not exposed by any Hetzner API; est_monthly is a price-list run-rate",
+      "cost_mtd": "not exposed by any Hetzner API: est_monthly, and each resource's usd_mo, are a price-list estimate",
+      "price_basis": "gross",
       "servers": [
-        {"name": "web-1", "status": "running", "type": "cpx31", "location": "ash", "traffic_out_pct": 2.4, "level": "ok"},
-        {"name": "db-1", "status": "running", "type": "cpx41", "location": "ash", "traffic_out_pct": 0.6, "level": "ok"},
-        {"name": "ci-runner", "status": "running", "type": "cax21", "location": "hel1", "traffic_out_pct": 11.8, "level": "ok"}
+        {"name": "web-1", "status": "running", "type": "cpx31", "location": "ash", "traffic_out_pct": 2.4, "level": "ok",
+         "usd_mo": 13.1, "overage_usd_mo": null},
+        {"name": "db-1", "status": "running", "type": "cpx41", "location": "ash", "traffic_out_pct": 0.6, "level": "ok",
+         "usd_mo": 25.06, "overage_usd_mo": null},
+        {"name": "ci-runner", "status": "running", "type": "cax21", "location": "hel1", "traffic_out_pct": 11.8, "level": "ok",
+         "usd_mo": 7.49, "overage_usd_mo": null}
       ],
       "storage_boxes": [
-        {"name": "backups", "status": "active", "location": "fsn1", "used_pct": 62.3, "used_tib": 0.62, "quota_tib": 1.0, "level": "ok"}
+        {"name": "backups", "status": "active", "location": "fsn1", "used_pct": 62.3, "used_tib": 0.62, "quota_tib": 1.0,
+         "level": "ok", "usd_mo": 4.9}
       ],
-      "est_monthly": 61.37,
+      "primary_ips": [
+        {"name": "web-1-ip", "ip_type": "ipv4", "location": "ash", "assigned": true, "usd_mo": 0.5},
+        {"name": "db-1-ip", "ip_type": "ipv4", "location": "ash", "assigned": true, "usd_mo": 0.5}
+      ],
+      "floating_ips": [
+        {"name": "legacy-fip", "ip_type": "ipv4", "location": "ash", "assigned": true, "usd_mo": 1.19}
+      ],
+      "snapshots": [
+        {"name": "web-1-backup", "gb": 25.0, "usd_mo": 0.28},
+        {"name": "db-1-backup", "gb": 40.0, "usd_mo": 0.44}
+      ],
+      "load_balancers": [
+        {"name": "lb-1", "type": "lb11", "location": "ash", "traffic_out_pct": 32.0, "usd_mo": 5.39, "overage_usd_mo": null}
+      ],
+      "est_by_kind": {"servers": 45.65, "volumes": 7.67, "storage_boxes": 4.9, "primary_ips": 1.0, "floating_ips": 1.19,
+                      "snapshots": 0.72, "load_balancers": 5.39},
+      "est_monthly": 66.52,
       "currency": "USD"
     },
     "error": null
