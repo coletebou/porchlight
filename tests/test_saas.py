@@ -52,7 +52,7 @@ def ago(**kw):
 
 
 class Router:
-    """A fake ctx.http routing (METHOD, URL without its query) to (status, body),
+    """A fake ctx.http routing (METHOD, URL without its query) to (status, body) or (status, body, headers),
     a callable(req) -> (status, body), or an exception to raise. Every call is
     recorded with its query parsed."""
 
@@ -72,8 +72,9 @@ class Router:
             raise ConnectionRefusedError("no fake route")
         if isinstance(h, Exception):
             raise h
-        status, body = h(req) if callable(h) else h
-        return core.Resp(status, body, 5, {})
+        out = h(req) if callable(h) else h
+        status, body, headers = (tuple(out) + ({},))[:3]  # an optional third element: response headers
+        return core.Resp(status, body, 5, headers)
 
 
 def assert_shape(tc, res):

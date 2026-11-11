@@ -113,6 +113,30 @@ class UsageFetch(unittest.TestCase):
             G.usage(ctx, {}, "user", "octocat", NOW)
         self.assertEqual(str(e.exception), "needs-scope")
 
+    def test_404_on_both_for_a_classic_token_without_the_scope_is_needs_scope(self):
+        # GitHub hides the billing endpoints from a classic token that lacks the scope with a 404, not a 403;
+        # the token's granted scopes come back in X-OAuth-Scopes.
+        scopes = {"X-OAuth-Scopes": "gist, read:org, repo, workflow"}
+        ctx, _ = self.ctx({("GET", GH + "/users/octocat/settings/billing/usage"): (404, {}, scopes),
+                           ("GET", GH + "/users/octocat/settings/billing/actions"): (404, {"message": "Not Found"}, scopes)})
+        with self.assertRaises(G.ProbeError) as e:
+            G.usage(ctx, {}, "user", "octocat", NOW)
+        self.assertEqual(str(e.exception), "needs-scope")
+        # an org target is satisfied by repo (the legacy endpoint's documented scope), so its 404 is a real failure
+        ctx, _ = self.ctx({("GET", GH + "/organizations/acme/settings/billing/usage"): (404, {}, scopes),
+                           ("GET", GH + "/orgs/acme/settings/billing/actions"): (404, {"message": "Not Found"}, scopes)})
+        with self.assertRaises(G.ProbeError) as e:
+            G.usage(ctx, {}, "org", "acme", NOW)
+        self.assertNotEqual(str(e.exception), "needs-scope")
+
+    def test_404_on_both_with_the_scope_or_no_scope_header_stays_a_plain_failure(self):
+        for headers in ({"x-oauth-scopes": "repo, user"}, {}):  # the scope granted; a fine-grained token (no header)
+            ctx, _ = self.ctx({("GET", GH + "/users/octocat/settings/billing/usage"): (404, {}, headers),
+                               ("GET", GH + "/users/octocat/settings/billing/actions"): (404, {"message": "Not Found"}, headers)})
+            with self.assertRaises(G.ProbeError) as e:
+                G.usage(ctx, {}, "user", "octocat", NOW)
+            self.assertNotEqual(str(e.exception), "needs-scope", headers)
+
     def test_garbage_shapes_raise_probeerror_not_a_crash(self):
         ctx, _ = self.ctx({("GET", GH + "/users/octocat/settings/billing/usage"): (200, {"usageItems": "not-a-list"})})
         with self.assertRaises(G.ProbeError):

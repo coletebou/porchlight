@@ -16,8 +16,9 @@ or per-repo figures, only total minutes used against the plan's included minutes
 
 A token that can reach GitHub but lacks billing read access (the classic `user`
 or `admin:org` scope, or a fine-grained token's "Plan: read" permission) gets a
-403 on both calls: that target is reported as needing that scope, a state, never
-an error alert, exactly as the task calls for. Every call is a GET; the token
+403 on both calls, or, for a classic token, a 404 whose X-OAuth-Scopes header lacks
+the scope (GitHub hides these endpoints that way): that target is reported as
+needing that scope, a state, never an error alert. Every call is a GET; the token
 never appears outside a header (saas._gh_token, shared with the github CI source).
 
 Alerts: only a configured monthly budget exceeded (crit), or any net spend at
@@ -45,6 +46,22 @@ def _legacy_path(kind: str, name: str) -> str:
     return "%s/%s/%s/settings/billing/actions" % (GH, seg, name)
 
 
+# Classic-token scopes that GitHub documents as granting the legacy billing reads.
+_SCOPES_FOR = {"user": ("user",), "org": ("admin:org", "repo")}
+
+
+def _lacks_scope(r, kind: str) -> bool:
+    """Whether a 404 is GitHub hiding a billing endpoint from a classic token that lacks the
+    scope, rather than the endpoint not existing: GitHub answers 404 (not 403) there, and a
+    classic token's reply lists its granted scopes in X-OAuth-Scopes. A fine-grained token
+    sends no such header, so its 404 stays a plain failure instead of a guessed scope gap."""
+    raw = next((v for k, v in (r.headers or {}).items() if str(k).lower() == "x-oauth-scopes"), None)
+    if raw is None:
+        return False
+    granted = {s.strip() for s in str(raw).split(",") if s.strip()}
+    return not granted.intersection(_SCOPES_FOR.get(kind, ()))
+
+
 def usage(ctx, h, kind: str, name: str, now: float) -> dict:
     """This target's Actions usage this month: the enhanced usage report
     ({"mode": "enhanced", "items": [...]}), or the legacy minutes-only reply
@@ -56,7 +73,7 @@ def usage(ctx, h, kind: str, name: str, now: float) -> dict:
         raise ProbeError("needs-scope")
     if r.status == 404:
         r = _req(ctx, "GET", _legacy_path(kind, name), h)
-        if r.status == 403:
+        if r.status == 403 or (r.status == 404 and _lacks_scope(r, kind)):
             raise ProbeError("needs-scope")
         if not r.ok:
             raise ProbeError(_api_err(r, "github "))
