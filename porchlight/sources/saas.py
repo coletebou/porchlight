@@ -715,23 +715,79 @@ def _uptimerobot(ctx):
     return _res(status, "%d/%d up; down: %s%s" % (len(up), len(kept), first["name"], tail), d, None, alerts)
 
 
-# ── Hetzner: Cloud servers + Storage Boxes (no billing API exists) ─────────
+# ── Hetzner: a per-resource cost table (no billing API exists) ─────────────
 HCLOUD = "https://api.hetzner.cloud/v1"
 HETZNER = "https://api.hetzner.com/v1"  # Storage Boxes moved to the new API; the same project token reads them
 BACKUP_SURCHARGE = 1.2  # server backups cost 20% of the server's price
+TIB = 2.0 ** 40         # included_traffic / outgoing_traffic are byte counts in this unit
+# Resource types whose failure is news (servers, Storage Boxes: the inventory itself).
+# IPs, snapshots and load balancers are cost-estimate extras, like the price list: a
+# failure there only drops that category from the estimate, the same as an unpriced item.
+_HARD = ("servers", "boxes")
 
 
-def _price(prices, loc):
+def _basis(cfg) -> str:
+    """"gross" (default: VAT included) or "net" (price_basis = "net"): which of
+    Hetzner's two Price fields — every price answer carries both — to sum."""
+    return "net" if str(cfg.get("price_basis") or "gross").strip().lower() == "net" else "gross"
+
+
+def _amt(price_obj, basis="gross"):
+    return _f(_d(price_obj).get(basis))
+
+
+def _price_row(prices, loc):
+    """The whole price entry at a location (price_monthly, and for server types and
+    load balancer types, included_traffic/price_per_tb_traffic too), or None. One
+    lookup serves both the monthly estimate and a traffic-overage rate."""
     for p in _dicts(prices):
         if p.get("location") == loc:
-            return _f(_d(p.get("price_monthly")).get("gross"))
+            return p
     return None
 
 
+def _price(prices, loc, basis="gross"):
+    row = _price_row(prices, loc)
+    return _amt(row.get("price_monthly"), basis) if row else None
+
+
+def _overage_usd(row, inc, out, basis="gross"):
+    """The list-price cost of traffic already past the included allowance this period,
+    from the price entry's price_per_tb_traffic; None when unpriced, or there is none."""
+    if not row or not out or out <= inc:
+        return None
+    rate = _amt(row.get("price_per_tb_traffic"), basis)
+    return (out - inc) / TIB * rate if rate else None
+
+
+def _priced_by(entries, key, value):
+    """The `prices` list of the pricing-API entry whose `key` matches `value`
+    (a primary/floating IP type, or a load balancer type's name)."""
+    for e in _dicts(entries):
+        if e.get(key) == value:
+            return e.get("prices")
+    return None
+
+
+def _hz_rows(ctx_items, ignore, build) -> tuple:
+    """(rows, total $/mo) for one resource list: build(item) -> (row dict with "usd_mo",
+    name to match against `ignore`). Items whose name matches `ignore` are left out."""
+    rows, total = [], 0.0
+    for it in ctx_items:
+        row, name = build(it)
+        if _ignored(name, ignore):
+            continue
+        rows.append(row)
+        if isinstance(row.get("usd_mo"), (int, float)):
+            total += row["usd_mo"]
+    return rows, total
+
+
 @_saas("hetzner", "hetzner", ttl=1800, timeout=20, needs=("HCLOUD_TOKEN",), defaults={
-    "storage_boxes": True, "ignore": [], "traffic_warn_pct": 90, "box_warn_pct": 80, "box_crit_pct": 90})
+    "storage_boxes": True, "primary_ips": True, "floating_ips": True, "snapshots": True, "load_balancers": True,
+    "price_basis": "gross", "ignore": [], "traffic_warn_pct": 90, "box_warn_pct": 80, "box_crit_pct": 90})
 def _hetzner(ctx):
-    """Hetzner: servers and traffic, Storage Box fill, a run-rate"""
+    """Hetzner: a per-resource cost table (servers, volumes, IPs, snapshots, load balancers, Storage Boxes), traffic, a run-rate"""
     tok = ctx.env.get("HCLOUD_TOKEN")
     if not tok:
         return _missing("HCLOUD_TOKEN")
@@ -741,21 +797,34 @@ def _hetzner(ctx):
              "pricing": lambda: _get(ctx, HCLOUD + "/pricing", h, None, "hcloud ")}
     if cfg.get("storage_boxes", True):
         calls["boxes"] = lambda: _get(ctx, HETZNER + "/storage_boxes", h, {"per_page": 50}, "hetzner ")
+    if cfg.get("primary_ips", True):
+        calls["primary_ips"] = lambda: _get(ctx, HCLOUD + "/primary_ips", h, {"per_page": 50}, "hcloud ")
+    if cfg.get("floating_ips", True):
+        calls["floating_ips"] = lambda: _get(ctx, HCLOUD + "/floating_ips", h, {"per_page": 50}, "hcloud ")
+    if cfg.get("snapshots", True):
+        calls["snapshots"] = lambda: _get(ctx, HCLOUD + "/images", h, {"per_page": 50, "type": "snapshot"}, "hcloud ")
+    if cfg.get("load_balancers", True):
+        calls["load_balancers"] = lambda: _get(ctx, HCLOUD + "/load_balancers", h, {"per_page": 50}, "hcloud ")
     res = _pmap(calls)
     errors = {k: e for k, (v, e) in res.items() if e}
     if len(errors) == len(res):
         return _fail("; ".join("%s: %s" % kv for kv in sorted(errors.items())), "all Hetzner calls failed")
     crit, warn = [], []
     ignore = _strs(cfg.get("ignore"))
+    basis = _basis(cfg)
     tw = _num(cfg, "traffic_warn_pct", 90)
     bw, bc = _num(cfg, "box_warn_pct", 80), _num(cfg, "box_crit_pct", 90)
-    d = {"cost_mtd": "not exposed by any Hetzner API; est_monthly is a price-list run-rate"}
-    est, est_ok = 0.0, True
+    d = {"cost_mtd": "not exposed by any Hetzner API: est_monthly, and each resource's usd_mo, are a price-list estimate",
+         "price_basis": basis}
+    by_kind, overage, est_ok = {}, 0.0, True
+    pricing = res["pricing"][0]
+    pr = _d(_d(pricing).get("pricing"))
+
     servers = _dicts(_d(res["servers"][0]).get("servers")) if res["servers"][0] is not None else None
     running = 0
     if servers is not None:
         servers = [s for s in servers if not _ignored(s.get("name"), ignore)]
-        rows = []
+        rows, est = [], 0.0
         for s in servers:
             st, name = str(s.get("status") or "?"), str(s.get("name") or "?")
             loc = _d(s.get("location")).get("name") or _d(_d(s.get("datacenter")).get("location")).get("name")
@@ -773,48 +842,117 @@ def _hetzner(ctx):
             if pct is not None and pct >= tw:
                 warn.append("server %s traffic %.0f%%" % (name, pct))
                 lv = "warn" if lv == "ok" else lv
-            price = _price(_d(s.get("server_type")).get("prices"), loc)
-            if price is None:
+            row = _price_row(_d(s.get("server_type")).get("prices"), loc)
+            price = _amt(row.get("price_monthly"), basis) if row else None
+            usd_mo = price * (BACKUP_SURCHARGE if s.get("backup_window") else 1.0) if price is not None else None
+            if usd_mo is None:
                 est_ok = False
             else:
-                est += price * (BACKUP_SURCHARGE if s.get("backup_window") else 1.0)
+                est += usd_mo
+            over = _overage_usd(row, inc, out, basis)
+            if over:
+                overage += over
             rows.append({"name": name, "status": st, "type": _d(s.get("server_type")).get("name"), "location": loc,
-                         "traffic_out_pct": pct, "level": lv})
+                         "traffic_out_pct": pct, "level": lv, "usd_mo": round(usd_mo, 2) if usd_mo is not None else None,
+                         "overage_usd_mo": round(over, 2) if over else None})
         d["servers"] = rows
-    vols, pricing = res["volumes"][0], res["pricing"][0]
+        by_kind["servers"] = round(est, 2)
+
+    vols = res["volumes"][0]
     gb = sum(_int(v.get("size")) for v in _dicts(_d(vols).get("volumes")))
-    per_gb = _f(_d(_d(_d(_d(pricing).get("pricing")).get("volume")).get("price_per_gb_month")).get("gross"))
+    per_gb = _amt(pr.get("volume", {}).get("price_per_gb_month"), basis)
     if vols is None or pricing is None or (gb and per_gb is None):
         est_ok = False
-    else:
-        est += gb * (per_gb or 0.0)
+    elif gb:
+        by_kind["volumes"] = round(gb * per_gb, 2)
+
     boxes = _dicts(_d(res.get("boxes", (None, None))[0]).get("storage_boxes"))
     if boxes:
-        rows = []
-        for b in boxes:
+        def box_row(b):
             name, loc = str(b.get("name") or "storage box"), _d(b.get("location")).get("name")
-            if _ignored(name, ignore):
-                continue
-            quota = _f(_d(b.get("storage_box_type")).get("size")) or 0.0
-            used = _f(_d(b.get("stats")).get("size")) or 0.0
+            quota, used = _f(_d(b.get("storage_box_type")).get("size")) or 0.0, _f(_d(b.get("stats")).get("size")) or 0.0
             p = round(100.0 * used / quota, 1) if quota else None
             lv = "crit" if p is not None and p >= bc else "warn" if (p is not None and p >= bw) or b.get("status") != "active" else "ok"
             if b.get("status") != "active":
                 warn.append("storage box %s %s" % (name, b.get("status")))
             if p is not None and p >= bw:
                 (crit if p >= bc else warn).append("storage box %s %.0f%% full" % (name, p))
-            price = _price(_d(b.get("storage_box_type")).get("prices"), loc)
-            est += price or 0.0
-            rows.append({"name": name, "status": b.get("status"), "location": loc, "used_pct": p,
-                         "used_tib": round(used / 2.0 ** 40, 2), "quota_tib": round(quota / 2.0 ** 40, 2), "level": lv})
+            price = _price(_d(b.get("storage_box_type")).get("prices"), loc, basis)
+            return {"name": name, "status": b.get("status"), "location": loc, "used_pct": p,
+                    "used_tib": round(used / TIB, 2), "quota_tib": round(quota / TIB, 2), "level": lv,
+                    "usd_mo": round(price, 2) if price is not None else None}, name
+        rows, est = _hz_rows(boxes, ignore, box_row)
         d["storage_boxes"] = rows
+        by_kind["storage_boxes"] = round(est, 2)
+
+    primary = _dicts(_d(res.get("primary_ips", (None, None))[0]).get("primary_ips"))
+    if primary:
+        def ip_row(ip):
+            name, loc = str(ip.get("name") or ip.get("ip") or "primary ip"), _d(ip.get("location")).get("name")
+            price = _price(_priced_by(pr.get("primary_ips"), "type", ip.get("type")), loc, basis)
+            return {"name": name, "ip_type": ip.get("type"), "location": loc, "assigned": bool(ip.get("assignee_id")),
+                    "usd_mo": round(price, 2) if price is not None else None}, name
+        rows, est = _hz_rows(primary, ignore, ip_row)
+        d["primary_ips"] = rows
+        by_kind["primary_ips"] = round(est, 2)
+
+    floating = _dicts(_d(res.get("floating_ips", (None, None))[0]).get("floating_ips"))
+    if floating:
+        def fip_row(ip):
+            name, loc = str(ip.get("name") or ip.get("ip") or "floating ip"), _d(ip.get("home_location")).get("name")
+            price = _price(_priced_by(pr.get("floating_ips"), "type", ip.get("type")), loc, basis)
+            return {"name": name, "ip_type": ip.get("type"), "location": loc, "assigned": bool(ip.get("server")),
+                    "usd_mo": round(price, 2) if price is not None else None}, name
+        rows, est = _hz_rows(floating, ignore, fip_row)
+        d["floating_ips"] = rows
+        by_kind["floating_ips"] = round(est, 2)
+
+    snaps = _dicts(_d(res.get("snapshots", (None, None))[0]).get("images"))
+    if snaps:
+        per_gb_img = _amt(pr.get("image", {}).get("price_per_gb_month"), basis)
+
+        def snap_row(im):
+            name = str(im.get("name") or im.get("description") or ("snapshot %s" % im.get("id", "?")))
+            gb_img = _f(im.get("image_size")) or _f(im.get("disk_size")) or 0.0
+            price = gb_img * per_gb_img if per_gb_img is not None else None
+            return {"name": name, "gb": round(gb_img, 1), "usd_mo": round(price, 2) if price is not None else None}, name
+        rows, est = _hz_rows(snaps, ignore, snap_row)
+        d["snapshots"] = rows
+        by_kind["snapshots"] = round(est, 2)
+
+    lbs = _dicts(_d(res.get("load_balancers", (None, None))[0]).get("load_balancers"))
+    if lbs:
+        def lb_row(lb):
+            name, loc, ty = str(lb.get("name") or "lb"), _d(lb.get("location")).get("name"), _d(lb.get("load_balancer_type")).get("name")
+            row = _price_row(_priced_by(pr.get("load_balancer_types"), "name", ty), loc)
+            price = _amt(row.get("price_monthly"), basis) if row else None
+            inc, out = _f(lb.get("included_traffic")) or 0.0, _f(lb.get("outgoing_traffic")) or 0.0
+            over = _overage_usd(row, inc, out, basis)
+            nonlocal overage
+            if over:
+                overage += over
+            pct = round(100.0 * out / inc, 1) if inc else None
+            if pct is not None and pct >= tw:
+                warn.append("load balancer %s traffic %.0f%%" % (name, pct))
+            return {"name": name, "type": ty, "location": loc, "traffic_out_pct": pct,
+                    "usd_mo": round(price, 2) if price is not None else None,
+                    "overage_usd_mo": round(over, 2) if over else None}, name
+        rows, est = _hz_rows(lbs, ignore, lb_row)
+        d["load_balancers"] = rows
+        by_kind["load_balancers"] = round(est, 2)
+
+    if overage:
+        by_kind["traffic_overage"] = round(overage, 2)
+    if by_kind:
+        d["est_by_kind"] = {k: v for k, v in by_kind.items() if v}
     if est_ok and servers is not None:
-        d["est_monthly"] = round(est, 2)
-        d["currency"] = str(_d(_d(pricing).get("pricing")).get("currency") or "USD").upper()
+        d["est_monthly"] = round(sum(by_kind.values()), 2)
+        d["currency"] = str(pr.get("currency") or "USD").upper()
     if errors:
         d["partial_errors"] = errors
-        if "servers" in errors or "boxes" in errors:  # the price list is an extra: its failure is not news
-            warn.append("partial data (%s)" % ", ".join(k for k in ("servers", "boxes") if k in errors))
+        hard = [k for k in _HARD if k in errors]
+        if hard:  # the price list, IPs, snapshots and load balancers are cost-estimate extras: not news on their own
+            warn.append("partial data (%s)" % ", ".join(hard))
     status, alerts = _verdict("hetzner", crit, warn)
     parts = []
     if servers is not None:

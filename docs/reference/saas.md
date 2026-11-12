@@ -138,10 +138,15 @@ is POST-only; getMonitors only reads).
 
 ## `hetzner`
 
-Hetzner Cloud servers (status, outgoing traffic against the included
-allowance), Storage Box fill, and a monthly run-rate from the price list.
-Hetzner has no billing API, so the run-rate (servers with their backup
-surcharge, volumes, storage boxes) is an estimate, not an invoice.
+A per-resource monthly cost table — servers (with their backup surcharge),
+volumes, primary IPv4/IPv6 addresses, Floating IPs, snapshots, load balancers
+and Storage Boxes — from the Hetzner Cloud price list, each priced at its own
+type and location; `est_monthly` is their sum. Hetzner has no billing API, so
+every figure here (`est_monthly`, `est_by_kind`, and each resource's
+`usd_mo`) is a list-price estimate, never an invoice; `cost_mtd` in the
+details says so. Also: server and load balancer status, outgoing traffic
+against the included allowance (with a list-price estimate of any overage),
+and Storage Box fill.
 
 **Credentials:** `HCLOUD_TOKEN` (a read-only project token is enough; the same
 token reads the project's Storage Boxes).
@@ -149,19 +154,28 @@ token reads the project's Storage Boxes).
 ```toml
 [sources.hetzner]
 storage_boxes = true
-ignore = []                # server or storage box names to leave out
-traffic_warn_pct = 90      # of a server's included outgoing traffic
+primary_ips = true         # false: skip (older tokens may not reach every resource type)
+floating_ips = true
+snapshots = true
+load_balancers = true
+price_basis = "gross"      # "net": Hetzner prices carry both; gross includes VAT
+ignore = []                # resource names to leave out (servers, boxes, IPs, snapshots, load balancers)
+traffic_warn_pct = 90      # of a server's or load balancer's included outgoing traffic
 box_warn_pct = 80
 box_crit_pct = 90
 ```
 
 **Alerts.** crit: a server off, deleting or unknown; a Storage Box at
-`box_crit_pct`. warn: a server starting, stopping or migrating; traffic at
-`traffic_warn_pct`; a Storage Box at `box_warn_pct` or not active; partial
-data. A failed price-list read only drops the estimate.
+`box_crit_pct`. warn: a server or load balancer starting/stopping/migrating or
+over `traffic_warn_pct`; a Storage Box at `box_warn_pct` or not active;
+partial data for the inventory itself (servers, Storage Boxes). A failed
+price-list read, or a primary IP/Floating IP/snapshot/load balancer read the
+token cannot reach, only drops that category from the estimate — an extra,
+like an unpriced resource, never news on its own.
 
-**Endpoints:** `GET https://api.hetzner.cloud/v1/servers`, `/volumes` and
-`/pricing`; `GET https://api.hetzner.com/v1/storage_boxes`.
+**Endpoints:** `GET https://api.hetzner.cloud/v1/servers`, `/volumes`,
+`/primary_ips`, `/floating_ips`, `/images?type=snapshot`, `/load_balancers`
+and `/pricing`; `GET https://api.hetzner.com/v1/storage_boxes`.
 
 ## `github`
 
@@ -203,6 +217,68 @@ variables) for PR counts and the head rollup;
 `GET /repos/{owner}/{name}/actions/runs?branch=&event=&per_page=30`; and, only
 for a workflow that looks red, `GET
 /repos/{owner}/{name}/actions/workflows/{id}/runs?branch=`.
+
+## `gh_actions_cost`
+
+Month-to-date GitHub Actions spend for one or more accounts: gross vs net,
+minutes by SKU, non-minute usage (storage) by SKU, and the top repositories by
+net cost. A separate source from `github` above (that one is CI status; this
+one is billing) so either runs without the other.
+
+**Credentials:** the same lookup as `github`: `GH_TOKEN`, `GITHUB_TOKEN`, then
+`gh auth token`. Reading billing needs more than CI does: a classic token
+needs the `user` scope (your own account) or `admin:org` (an org you own); a
+fine-grained token needs the account's "Plan: read" permission. A token that
+can reach GitHub but lacks that scope is reported as needing it — a state,
+never an error alert. GitHub answers such a token with a 403, or, for a classic
+token, a 404 on both billing endpoints; the classic case is recognised from the
+`X-OAuth-Scopes` header GitHub returns, so a fine-grained token's 404 (no such
+header) still shows as a plain fetch failure.
+
+```toml
+[sources.gh_actions_cost]
+user = ""          # empty: the token's own login (one extra GET to learn it, as github.user does)
+orgs = []          # org logins to also bill; each needs its own billing-read scope
+budget_usd = 0     # 0: no budget alert, only a plain "net spend > 0" warning
+top_repos = 8      # repositories kept in top_repos, sorted by net cost
+```
+
+**What counts as Actions.** A usage line item counts when its `product` is
+exactly `"Actions"`, or its `sku` names Actions (the larger "Linux"/"Windows"/
+"macOS" runners, and larger-runner variants, are separate SKUs under the same
+product). A bare `"Shared Storage"` row — which GitHub Packages can also bill
+— is left out rather than attributed to Actions by a guess; it would only
+ever show up if a repository uses no other Shared Storage consumer.
+
+**Enhanced vs legacy billing.** The primary read is the enhanced usage report,
+`GET /users/{user}/settings/billing/usage` (or `/organizations/{org}/...`),
+scoped to this month (`year`, `month` query parameters); each item carries
+`date`, `product`, `sku`, `quantity`, `unitType`, `pricePerUnit`,
+`grossAmount`, `discountAmount`, `netAmount` and, for Actions, `repositoryName`.
+An account without the enhanced billing platform (GitHub Enterprise Server, or
+an older personal account) gets a 404 there; the source falls back to the
+legacy `GET /users/{user}/settings/billing/actions` (`/orgs/{org}/...`), which
+has no dollar figures or per-repo detail, only `total_minutes_used` against
+the plan's `included_minutes`. Mixing targets (your own account on the
+enhanced platform, an org still on the legacy one) is normal: both read, and
+the panel shows what each has.
+
+`discount_pct` is `discountAmount / grossAmount` for the Actions-only rows: the
+share of this month's usage the plan's included minutes, or an existing
+credit, already covered — not literally "percent of your plan's minute quota
+used", since neither billing API exposes the quota's size, only the discount
+it already applied.
+
+**Alerts.** crit: net spend over `budget_usd`. warn: any net spend at all
+(the common case for a public-repo-only, free-tier account is $0 net forever).
+Nothing else alerts: a target needing billing scope, a legacy-only target, or
+a partial multi-target failure are states, shown in the panel, never an alarm.
+
+**Endpoints** (`https://api.github.com`, GET only): `GET /user` or `GET
+/rate_limit` to validate the token (as `github` does); `GET
+/users/{u}/settings/billing/usage` or `/organizations/{org}/settings/billing/usage`
+(`year`, `month` params); on a 404, `GET /users/{u}/settings/billing/actions`
+or `/orgs/{org}/settings/billing/actions`.
 
 ## `sentry`
 
@@ -359,7 +435,7 @@ https://api.twilio.com/2010-04-01/Accounts/{sid}/Balance.json` and
 | `edge` | UptimeRobot monitors, the `sites` endpoints, Cloudflare tunnels, traffic and inactive zones, Vercel production deploys |
 | `infra` | Hetzner servers and Storage Box fill, GitHub CI per repo with open PRs, Sentry, and a one-line AWS summary when the AWS panel is not in the layout |
 | `comms` | Resend domains and sends, Cloudflare Email Routing, Twilio SMS |
-| `money` | Stripe balance, subscriptions and MRR, Anthropic and OpenAI month-to-date, OpenRouter credits, xAI, the Hetzner run-rate, the AWS month against its budget ([aws.md](aws.md)), Cursor on-demand spend, the Twilio balance |
+| `money` | Stripe balance, subscriptions and MRR, Anthropic and OpenAI month-to-date, OpenRouter credits, xAI, the Hetzner run-rate, GitHub Actions spend, the AWS month against its budget ([aws.md](aws.md)), Cursor on-demand spend, the Twilio balance |
 
 A panel's note names a source whose reading is stale or whose last run failed
 (`cloudflare ✖ 2h`). A service that answered with a reason and no data (a

@@ -62,6 +62,9 @@
              ["@day-4", 7.45], ["@day-3", 11.21], ["@day-2", 12.98], ["@day-1", 11.37], ["@day+0", 3.12]],
     "services": [["EC2", 205.1], ["EC2-Other", 58.21], ["VPC", 15.62], ["S3", 5.4], ["CloudWatch", 2.11], ["KMS", 1.22]],
     "per_day": {"ec2": 7.89, "ec2_other": 2.24, "other": 0.34, "vpc": 0.6}, "partial": false,
+    "detail": "usage_type",
+    "usage_types": {"ebs": 34.1, "snapshot": 4.85, "nat_gateway": 3.2, "public_ipv4": 2.6, "data_transfer": 9.15, "other": 209.41},
+    "ce_forecast": 329.84,
     "tried_at": "-20000", "as_of": "-20000", "profile": "prod"
   }
 }

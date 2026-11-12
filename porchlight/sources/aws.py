@@ -486,7 +486,8 @@ def alerts(instances, vols, hosts, home, budget, partial) -> list:
 
 
 @_saas("aws_account", "aws", ttl=3600, timeout=45, binaries=("aws",), defaults={
-    "profile": "", "home_regions": [], "sweep": 2, "max_concurrent": 3, "cost_explorer": "off"})
+    "profile": "", "home_regions": [], "sweep": 2, "max_concurrent": 3, "cost_explorer": "off",
+    "cost_detail": "usage_type", "cost_forecast": False})
 def _aws_account(ctx):
     """AWS: instances in every enabled region at list price, the burn per hour, budgets"""
     if not aws_bin(ctx):

@@ -39,6 +39,8 @@ home_regions = []       # read every run; empty: the profile's region, else AWS_
 sweep = 2               # the account's other enabled regions read per run, round robin (0: home regions only)
 max_concurrent = 3      # aws processes at once; each one peaks near 130 MB
 cost_explorer = "off"   # "daily": aws_cost asks Cost Explorer once a day ($0.01 a request)
+cost_detail = "usage_type"  # the day's free second --group-by: "usage_type" (default), "region", "linked_account" or "none"
+cost_forecast = false       # true: one more $0.01/day request (Cost Explorer's own GetCostForecast)
 ```
 
 **The profile.** With `profile` set, that profile is the only one tried: if its
@@ -160,21 +162,52 @@ reading instead; it takes the source over only after the hub has been silent
 for three days.
 
 **The request.** Daily unblended cost grouped by service, from the first of the
-month (or two weeks back, early in a month) through today, which is partial:
+month (or two weeks back, early in a month) through today, which is partial. A
+second `--group-by` dimension rides along at no extra charge (one request, with
+or without it): `cost_detail = "usage_type"`, the default, so the reply also
+breaks each day down by usage type, which the panel uses to split the opaque
+"EC2 - Other" bucket (and the EC2 compute bucket) into EBS, snapshots, NAT
+gateways, public IPv4 addresses and idle Elastic IPs, and data transfer — the
+rest falls into an `other` bucket (mostly instance-hours, already counted in
+`services`):
 
 ```text
 aws ce get-cost-and-usage --time-period Start=2026-10-01,End=2026-10-28 --granularity DAILY \
-  --metrics UnblendedCost --group-by Type=DIMENSION,Key=SERVICE --no-paginate
+  --metrics UnblendedCost --group-by Type=DIMENSION,Key=SERVICE Type=DIMENSION,Key=USAGE_TYPE --no-paginate
 ```
 
+Set `cost_detail = "region"` or `"linked_account"` instead to trade that
+breakdown for a top list by region or linked account (also free: it swaps the
+second dimension, it does not add one); `"none"` drops the second dimension
+and asks only by service, as before 0.3.0.
+
 It keeps the month to date, the last two weeks of daily totals, the top services
-this month, and the average daily spend over the last full week per bucket (EC2
-instances, EC2-Other, VPC and everything else) for the forecast.
+this month, the usage-type (or region/account) breakdown, and the average daily
+spend over the last full week per bucket (EC2 instances, EC2-Other, VPC and
+everything else) for the heuristic forecast.
 A refusal (Cost Explorer not enabled for the account, a missing permission) is
 shown in the panel and asked again the next day.
 
-To stop it, set `cost_explorer = "off"` (the default), or `[sources.aws_cost]
-enabled = false`.
+**The forecast.** By default the month line's forecast is a heuristic: the month
+so far, plus each bucket's daily rate (the hourly model's, or Cost Explorer's own
+average where the model only covers part of a bucket) carried to the end of the
+month. Set `cost_forecast = true` to add a second, genuinely extra request the
+same day — Cost Explorer's own `GetCostForecast`, a model trained on the
+account's own history — and the panel shows that number instead:
+
+```text
+aws ce get-cost-forecast --time-period Start=2026-10-28,End=2026-11-01 \
+  --metric UNBLENDED_COST --granularity MONTHLY
+```
+
+That makes two $0.01 requests on the day both run (about $0.60 a month instead
+of $0.30). A forecast failure never costs the base reading, already billed that
+day; the panel falls back to the heuristic.
+
+To stop asking Cost Explorer at all, set `cost_explorer = "off"` (the default),
+or `[sources.aws_cost] enabled = false`. Per month, opted all the way in: at
+most 31 requests for the usage/usage-type query, plus 31 more for the forecast —
+**$0.31 to $0.62** total, never more, no matter how often the collector runs.
 
 ---
 
@@ -189,15 +222,16 @@ A read-only policy for the profile the dashboard reads with:
     "Effect": "Allow",
     "Action": ["ec2:DescribeRegions", "ec2:DescribeInstances", "ec2:DescribeVolumes", "ec2:DescribeAddresses",
                "ec2:DescribeHosts", "ec2:DescribeSpotPriceHistory", "pricing:GetProducts", "budgets:ViewBudget",
-               "ce:GetCostAndUsage"],
+               "ce:GetCostAndUsage", "ce:GetCostForecast"],
     "Resource": "*"
   }]
 }
 ```
 
 `sts:GetCallerIdentity` needs no permission. Drop `ce:GetCostAndUsage` when Cost
-Explorer is off. A missing permission shows as that resource's error in the
-panel, never as a guess.
+Explorer is off, and `ce:GetCostForecast` unless `cost_forecast = true`. A
+missing permission shows as that resource's error in the panel, never as a
+guess.
 
 ---
 
@@ -209,6 +243,7 @@ panel, never as a guess.
  daily    ▇▇▆▅▇███▆▅▆███ · yesterday $11.37 · 7d avg $10.10
  burn     $0.48/h ≈$11/day · ec2 $0.36 · ebs $0.09 · ip $0.02
  services EC2 $205 · EC2-Other $58.21 · VPC $15.62 · +3 $8.73
+ usage    ebs $34.10 · xfer $9.15 · snap $4.85 · nat $3.20 · ip $2.60
  running  ▶ api-1    m7i.l   21d $0.10/h
           ▶ api-2    m7i.l   21d $0.10/h
           ▶ build-eu t3.l     2h $0.09/h eu-west-1
@@ -218,10 +253,12 @@ panel, never as a guess.
 
 | Row | Shows |
 | --- | --- |
-| month | the month to date (the account budget's spend, else Cost Explorer's), against the budget, and a forecast: the month so far plus a daily rate carried to the month's end. Per bucket the rate is the hourly model's (instances, which it knows to the hour) or, where the model covers only part of a bucket (EC2-Other also holds snapshots, NAT gateways and transfer), the larger of it and Cost Explorer's average of the last full week |
+| month | the month to date (the account budget's spend, else Cost Explorer's), against the budget, and a forecast. With `cost_forecast = true`, Cost Explorer's own `GetCostForecast`; otherwise a heuristic: the month so far plus a daily rate carried to the month's end, per bucket the hourly model's (instances, which it knows to the hour) or, where the model covers only part of a bucket (EC2-Other also holds snapshots, NAT gateways and transfer), the larger of it and Cost Explorer's average of the last full week |
 | daily | a spark of the last two weeks' full days, the latest of them (named by its date unless it was yesterday: the read's own last day was partial), and the week's average (Cost Explorer) |
 | burn | the run-rate per hour now, about per day, and its parts: compute, EBS, public IPv4, dedicated hosts, how many resources are unpriced |
 | services | this month's spend by service (Cost Explorer) |
+| usage | with the default `cost_detail = "usage_type"`: EC2 and EC2-Other broken into ebs, snap(shot), nat (gateway), ip (public IPv4 / idle EIP) and xfer (data transfer); `other` (mostly instance-hours, already in `services`) is shown only when nothing else is |
+| region / account | with `cost_detail = "region"` or `"linked_account"`: the month's top regions or linked accounts, in place of the `usage` row |
 | running | each running instance: type, uptime, price per hour, spot, its region when outside the home regions |
 | host | dedicated hosts: family, region, age, instances on it, price |
 | stopped | the idle spend per month, and what makes it up |
